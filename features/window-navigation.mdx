@@ -1,0 +1,105 @@
+---
+title: "Keyboard-First Window Navigation in BetterWinTab"
+sidebarTitle: "Window Navigation"
+description: "Navigate every open window using only the keyboard. Covers folder switching, window focus, live thumbnails, virtual desktop badges, and pinned windows."
+---
+
+BetterWinTab replaces the flat, recency-ordered Alt+Tab list with a compact, keyboard-driven overlay that groups every open window by context. Press `Ctrl+Tab` at any time — even from a full-screen app — and the overlay appears over your desktop without disrupting the foreground window. Once you find the window you need, press `Enter` to focus it and the overlay disappears instantly.
+
+## The Overlay Layout
+
+The overlay is organized into four distinct areas:
+
+- **Folders sidebar** — a vertical list on the left showing all your folders (All Windows, smart folders, manual folders, Clipboard, and Recycle Bin). Keyboard focus moves between folders with `Tab` and `Shift+Tab`.
+- **Window cards** — the main panel fills with cards for every window in the selected folder. Each card shows the app icon, window title, process name, and a virtual desktop badge when multiple desktops are active. Arrow keys move selection between cards.
+- **Search bar** — displayed at the top of the window panel. It activates the moment you type any alphanumeric character; no mouse click required.
+- **Thumbnail preview** — a live DWM mirror of the selected window rendered at the top-right of the overlay, updating in real time.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Tab` | Show or hide the overlay |
+| `Tab` | Move to the next folder in the sidebar |
+| `Shift+Tab` | Move to the previous folder in the sidebar |
+| `Arrow keys` | Move selection between window cards |
+| `Enter` | Focus the selected window or launch the selected app |
+| `Esc` | Clear the search query (first press) or close the overlay (second press) |
+| `F5` | Refresh the window list |
+| `Delete` | Close the selected window |
+| `0–9`, `a–z`, `A–Z` | Start typing instantly to search — no need to click the search bar |
+| `Tab` *(while searching)* | Toggle search mode between **All windows** and **Apps** (app launcher) |
+
+<Tip>
+You never need to click the search bar. The moment you press any alphanumeric key while the overlay is open, BetterWinTab captures the character and begins filtering. This lets you go from `Ctrl+Tab` to a focused window in under a second.
+</Tip>
+
+The activation hotkey can be changed from **Settings → General** — any modifier + key combination is supported.
+
+## Live DWM Thumbnail Previews
+
+When you select a window card, BetterWinTab registers a **DWM (Desktop Window Manager) thumbnail** — a real-time mirror of the window's content rendered directly by the compositor at zero CPU cost. The thumbnail updates live even while the source window is minimized or on another virtual desktop.
+
+Preview rendering is controlled by two settings:
+
+| Setting | Default | Description |
+|---|---|---|
+| `ShowLivePreviews` | `true` | Enables or disables live DWM thumbnails. When `false`, only the app icon is shown. |
+| `ThumbnailWidth` | `320` | Width of the thumbnail area in pixels. |
+| `ThumbnailHeight` | `200` | Height of the thumbnail area in pixels. |
+
+Both dimensions can be adjusted in **Settings → General**. The DWM compositor handles all scaling and clipping, so the thumbnail maintains a correct aspect ratio within the configured bounds.
+
+## Virtual Desktop Badges
+
+BetterWinTab integrates with the Windows `IVirtualDesktopManager` COM interface to surface per-window virtual desktop metadata. Each `WindowInfo` carries the following fields:
+
+- **`DesktopNumber`** — 1-based desktop index (1 = first desktop, matching Windows Task View numbering)
+- **`DesktopName`** — human-readable name shown in the window card badge
+- **`IsOnCurrentDesktop`** — `true` when the window lives on the currently active virtual desktop
+
+Desktop badges are only shown in the UI when the system has more than one virtual desktop active (`HasMultipleDesktops`). If you use only a single desktop, no badge is rendered.
+
+Desktop names are read directly from the Windows registry key:
+
+```
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops\Desktops\{<DesktopGUID>}
+```
+
+<Note>
+When a desktop has no custom name set in the registry, BetterWinTab falls back to a locale-aware label that matches what Windows Task View displays — for example **Desktop 1** in English, **Escritorio 2** in Spanish, **Bureau 3** in French, **Schreibtisch 4** in German, and so on. The fallback word is resolved from `CultureInfo.CurrentUICulture.TwoLetterISOLanguageName` at runtime, so it always matches the OS display language.
+</Note>
+
+If a window is on a different virtual desktop, BetterWinTab can move it to the current desktop automatically when you press `Enter` to focus it — no manual Task View switching required.
+
+## Pinned Windows
+
+Pinned windows are windows you mark as favorites. They:
+
+- **Appear first** in every folder, ahead of all other windows, regardless of the folder's sort order.
+- **Survive app restarts** — pins are persisted in `AppSettings.PinnedWindows` as `PinnedWindowId` records identified by `ProcessName` + `TitlePattern`, not by the volatile window handle.
+
+### How Matching Works
+
+Because window handles change between reboots, BetterWinTab re-identifies pinned windows using a `PinnedWindowId` that combines two fields:
+
+| Field | Description |
+|---|---|
+| `ProcessName` | The process executable name (e.g., `Code`, `chrome`, `WindowsTerminal`) |
+| `TitlePattern` | The window title to match — supports the `*` wildcard |
+
+The wildcard `*` can appear at the start, end, or both ends of the pattern:
+
+| Pattern | Behavior |
+|---|---|
+| `*` (or empty) | Matches **any** title for that process |
+| `Untitled*` | Matches titles that **start with** "Untitled" |
+| `*main.tsx` | Matches titles that **end with** "main.tsx" |
+| `*Pull Request*` | Matches titles that **contain** "Pull Request" |
+| `My Notes` | Exact title match (case-insensitive) |
+
+All comparisons are case-insensitive.
+
+## The Recycle Bin Folder
+
+The **Recycle Bin** is a special built-in folder (`FolderType.RecycleBin`) that is always pinned to the bottom of the sidebar and cannot be deleted. Selecting it and pressing `Enter` opens the Windows shell Recycle Bin directly — no need to minimize windows or navigate to the desktop. It is the fastest way to access the Recycle Bin from the keyboard.

@@ -1,0 +1,222 @@
+---
+title: "WindowFolder and FolderRule Model Reference"
+sidebarTitle: "WindowFolder"
+description: "Reference for the WindowFolder model, FolderType enum, FolderRuleGroup, FolderRuleCondition, RuleField, RuleComparison, and RuleOperator types."
+---
+
+`WindowFolder` represents a named grouping of windows in BetterWinTab's sidebar. Folders can operate in several modes — from fully manual user assignments to composite rule-based smart filtering — controlled by the `FolderType` enum. The rule engine (`FolderRuleGroup` + `FolderRuleCondition`) powers the `SmartRules` folder type, enabling multi-condition AND/OR logic against any combination of process name, window title, and class name.
+
+---
+
+## WindowFolder
+
+### Identity & Display
+
+<ParamField path="Id" type="string">
+  A unique identifier for this folder, stored as a `Guid` serialized to a string (e.g., `"3f2504e0-4f89-11d3-9a0c-0305e82c3301"`). Generated at creation via `Guid.NewGuid().ToString()`. Used as a stable key for folder lookup, drag-and-drop ordering, and manual window handle association.
+</ParamField>
+
+<ParamField path="Name" type="string" default='"New Folder"'>
+  The display label shown in the sidebar and folder header. Editable by the user.
+</ParamField>
+
+<ParamField path="Icon" type="string" default='"\uE8B7"'>
+  A single Unicode character rendered as the folder's icon glyph in the sidebar. Defaults to the Segoe MDL2 Assets folder icon (`\uE8B7`). Users can customize this with any Unicode character, including emoji.
+</ParamField>
+
+<ParamField path="BackgroundColor" type="string" default='""'>
+  A hex color string (e.g., `"#FF5733"`) applied as a background tint to the folder item in the sidebar. An empty string means no background tint is applied and the folder uses the default surface color.
+</ParamField>
+
+<ParamField path="SortOrder" type="int" default="0">
+  Integer display order for the folder in the sidebar. Folders are rendered in ascending `SortOrder`. Updated when the user reorders folders via drag-and-drop.
+</ParamField>
+
+---
+
+### Folder Type
+
+<ParamField path="Type" type="FolderType" default="FolderType.Manual">
+  Controls how windows are populated in this folder. See the [FolderType enum](#foldertype-enum) table below for all valid values and their behaviors.
+</ParamField>
+
+---
+
+### Filter Configuration
+
+<ParamField path="ProcessFilter" type="string?">
+  The process name to match for `SmartProcess`-type folders (e.g., `"Code"`, `"chrome"`). This is the **legacy single-process filter**, retained for backward compatibility with settings files created before the `SmartRules` system was introduced. New smart folders should use `Rules` instead.
+</ParamField>
+
+<ParamField path="ClassNameFilter" type="string?">
+  The Win32 window class name to match for `SmartClass`-type folders (e.g., `"Chrome_WidgetWin_1"`). This is the **legacy single-class filter**, also kept for backward compatibility. New smart folders should prefer `SmartRules` with a `ClassName` condition.
+</ParamField>
+
+<ParamField path="Rules" type="FolderRuleGroup?">
+  The composite rule group for `SmartRules`-type folders. Holds an `AND`/`OR` operator and a list of `FolderRuleCondition` entries. See [FolderRuleGroup](#folderrulegroup) below. `null` when the folder type is not `SmartRules`.
+</ParamField>
+
+---
+
+### Runtime Collections
+
+<Note>
+  The following two properties are decorated with `[JsonIgnore]` and are **never persisted to disk**. They are populated at runtime during window enumeration and folder population. Do not rely on them having valid data outside of the active application session.
+</Note>
+
+<ParamField path="Windows" type="ObservableCollection<WindowInfo>">
+  The live, observable collection of `WindowInfo` objects currently assigned to this folder. Bound directly to the WinUI 3 window grid via data binding. Repopulated on each window enumeration cycle.
+</ParamField>
+
+<ParamField path="ManualWindowHandles" type="HashSet<IntPtr>">
+  The set of raw Win32 window handles (`HWND`) that the user has manually assigned to this folder. While `Handle` values are volatile across reboots, this set persists across window enumeration refreshes within a single session, allowing manual assignments to survive a `Windows` collection rebuild without requiring re-assignment.
+</ParamField>
+
+---
+
+### Methods
+
+#### `GetFilterSummary()`
+
+Returns a short human-readable string describing the folder's current filtering logic. Used in the Settings panel and folder edit UI.
+
+| FolderType | Example output |
+|---|---|
+| `All` | `"All open windows"` |
+| `SmartProcess` | `"Process: chrome"` |
+| `SmartClass` | `"Class: Chrome_WidgetWin_1"` |
+| `SmartRules` (with rules) | `"Rules (AND): ProcessName Equals \"Code\", Title Contains \"src\""` |
+| `SmartRules` (empty) | `"Smart rules (empty)"` |
+| `Manual` | `"Custom folder"` |
+| `Clipboard` | `"Clipboard history"` |
+| `RecycleBin` | `"Recycle Bin"` |
+
+---
+
+## FolderType Enum
+
+| Value | Description |
+|---|---|
+| `All` | A catch-all folder that always displays every open window. Typically used for the default "All Windows" entry. |
+| `Manual` | The user explicitly assigns windows to this folder via drag-and-drop or the context menu. Window assignments are tracked in `ManualWindowHandles`. |
+| `SmartProcess` | Automatically includes all windows whose `ProcessName` matches `ProcessFilter` (case-insensitive). Legacy single-process filter. |
+| `SmartClass` | Automatically includes all windows whose `ClassName` matches `ClassNameFilter` (case-insensitive). Legacy single-class filter. |
+| `SmartRules` | Composite rule-based filtering using `FolderRuleGroup`. Supports multiple conditions with AND/OR logic across `ProcessName`, `Title`, and `ClassName`. The recommended approach for new smart folders. |
+| `Clipboard` | Special system folder that displays clipboard history items from BetterWinTab's clipboard monitor. Not populated by window enumeration. |
+| `RecycleBin` | Special system folder shortcut that opens the Windows Recycle Bin when selected. |
+
+---
+
+## FolderRuleGroup
+
+`FolderRuleGroup` is the root of the rule tree for `SmartRules` folders. It holds a top-level logical operator and a flat list of conditions.
+
+<ParamField path="Operator" type="RuleOperator" default="RuleOperator.OR">
+  Determines how the individual conditions in `Conditions` are combined. `AND` requires every condition to match; `OR` requires at least one to match. See [RuleOperator](#ruleoperator-enum).
+</ParamField>
+
+<ParamField path="Conditions" type="List<FolderRuleCondition>" default="[]">
+  The list of individual conditions to evaluate. Each condition targets a single window field (`ProcessName`, `Title`, or `ClassName`) and applies a comparison operator against a value string. See [FolderRuleCondition](#folderrulecondition) below.
+</ParamField>
+
+### `Matches(WindowInfo window)` Method
+
+Evaluates the entire rule group against a window. Returns `false` immediately if `Conditions` is empty.
+
+```csharp
+public bool Matches(WindowInfo window)
+{
+    if (Conditions.Count == 0) return false;
+
+    return Operator == RuleOperator.AND
+        ? Conditions.All(c => c.Matches(window))   // AND: every condition must pass
+        : Conditions.Any(c => c.Matches(window));   // OR:  at least one must pass
+}
+```
+
+---
+
+## FolderRuleCondition
+
+`FolderRuleCondition` represents a single predicate tested against one field of a `WindowInfo`. All string comparisons are **case-insensitive**.
+
+<ParamField path="Field" type="RuleField" default="RuleField.ProcessName">
+  Which property of the `WindowInfo` to test. See [RuleField](#rulefield-enum).
+</ParamField>
+
+<ParamField path="Comparison" type="RuleComparison" default="RuleComparison.Equals">
+  The comparison operator to apply between the field's runtime value and `Value`. See [RuleComparison](#rulecomparison-enum).
+</ParamField>
+
+<ParamField path="Value" type="string" default='""'>
+  The string to compare the field value against. For `Regex` comparisons this is a .NET regular expression pattern. All other comparisons treat this as a literal string.
+</ParamField>
+
+### `Matches(WindowInfo window)` Method
+
+Resolves the target field value from `window`, then dispatches to the appropriate comparison:
+
+```csharp
+var fieldValue = Field switch
+{
+    RuleField.ProcessName => window.ProcessName,
+    RuleField.Title       => window.Title,
+    RuleField.ClassName   => window.ClassName,
+    _                     => string.Empty
+};
+
+return Comparison switch
+{
+    RuleComparison.Equals     => fieldValue.Equals(Value,      OrdinalIgnoreCase),
+    RuleComparison.Contains   => fieldValue.Contains(Value,    OrdinalIgnoreCase),
+    RuleComparison.StartsWith => fieldValue.StartsWith(Value,  OrdinalIgnoreCase),
+    RuleComparison.EndsWith   => fieldValue.EndsWith(Value,    OrdinalIgnoreCase),
+    RuleComparison.Regex      => TryRegexMatch(fieldValue, Value),
+    _                         => false
+};
+```
+
+<Note>
+  `Regex` comparisons use `TryRegexMatch`, which wraps `Regex.IsMatch` in a `try/catch` and returns `false` on an invalid or malformed pattern rather than throwing an exception. This ensures that a bad regex entered by the user does not crash the enumeration pipeline.
+</Note>
+
+### `ToString()` Method
+
+Returns a compact representation used in `GetFilterSummary()` output:
+
+```
+ProcessName Equals "Code"
+Title Contains "src"
+ClassName Regex "^Chrome_"
+```
+
+---
+
+## RuleOperator Enum
+
+| Value | Description |
+|---|---|
+| `AND` | All conditions in the group must match for the window to be included. |
+| `OR` | Any single condition in the group matching is sufficient to include the window. |
+
+---
+
+## RuleField Enum
+
+| Value | Tested Property | Example value |
+|---|---|---|
+| `ProcessName` | `WindowInfo.ProcessName` | `"Code"`, `"chrome"`, `"explorer"` |
+| `Title` | `WindowInfo.Title` | `"README.md - MyProject"` |
+| `ClassName` | `WindowInfo.ClassName` | `"Chrome_WidgetWin_1"`, `"Notepad"` |
+
+---
+
+## RuleComparison Enum
+
+| Value | Behavior | Case-sensitive? |
+|---|---|---|
+| `Equals` | Field must exactly match `Value`. | No (OrdinalIgnoreCase) |
+| `Contains` | Field must contain `Value` as a substring. | No (OrdinalIgnoreCase) |
+| `StartsWith` | Field must begin with `Value`. | No (OrdinalIgnoreCase) |
+| `EndsWith` | Field must end with `Value`. | No (OrdinalIgnoreCase) |
+| `Regex` | Field must match the .NET regex in `Value` (IgnoreCase flag set). Invalid patterns return `false` silently. | No (RegexOptions.IgnoreCase) |

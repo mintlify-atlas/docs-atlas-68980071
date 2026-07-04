@@ -1,0 +1,277 @@
+---
+title: "FolderService API Reference"
+sidebarTitle: "FolderService"
+description: "FolderService manages window folder creation, filtering, and persistence. Documents all public methods for creating smart, manual, clipboard, and recycle bin folders."
+---
+
+`FolderService` is the central authority for managing window folders (categories) in BetterWinTab. It holds a live `ObservableCollection<WindowFolder>` that the UI binds to, handles all filter evaluation against enumerated windows, and serializes/deserializes folder configuration through `AppSettings`. The service distinguishes between the built-in **All Windows** folder, user-created smart and manual folders, and the two singleton special folders — **Clipboard** and **Recycle Bin**.
+
+---
+
+## Constructor
+
+### `FolderService(WindowEnumerationService)`
+
+Initializes the service and immediately adds the built-in **All Windows** folder as the first entry in `Folders`.
+
+```csharp
+public FolderService(WindowEnumerationService windowService)
+```
+
+<ParamField path="windowService" type="WindowEnumerationService" required>
+  The window enumeration service used by `RefreshAllFolders` and `RefreshFolder` to obtain the current list of open windows.
+</ParamField>
+
+---
+
+## Properties
+
+### `Folders`
+
+```csharp
+public ObservableCollection<WindowFolder> Folders { get; }
+```
+
+The live, ordered list of all folders. The UI binds directly to this collection — adding or removing folders is immediately reflected in the overlay sidebar. The **All Windows** folder (`FolderType.All`) is always at index 0 (`SortOrder = 0`).
+
+---
+
+## Methods
+
+### `RefreshAllFolders()`
+
+Re-evaluates every folder's filter rules against the current set of open windows. Internally calls `WindowEnumerationService.GetAllWindows()` once and passes the result to `RefreshFolder` for each folder, avoiding redundant enumeration.
+
+```csharp
+public void RefreshAllFolders()
+```
+
+<Note>
+  Clipboard (`FolderType.Clipboard`) and Recycle Bin (`FolderType.RecycleBin`) folders are skipped — their `Windows` collections are always cleared and left empty because they represent actions rather than window groups.
+</Note>
+
+---
+
+### `RefreshFolder(WindowFolder, List<WindowInfo>?)`
+
+Refreshes a single folder's `Windows` collection. If `allWindows` is not supplied the service calls `GetAllWindows()` internally.
+
+```csharp
+public void RefreshFolder(WindowFolder folder, List<WindowInfo>? allWindows = null)
+```
+
+<ParamField path="folder" type="WindowFolder" required>
+  The folder whose `Windows` collection should be rebuilt. The collection is cleared before repopulating.
+</ParamField>
+
+<ParamField path="allWindows" type="List<WindowInfo>?" default="null">
+  An optional pre-fetched window list. Pass this when you are refreshing multiple folders in a loop to avoid redundant system calls.
+</ParamField>
+
+Filter logic by `FolderType`:
+
+| `FolderType`   | Filter behaviour |
+|----------------|-----------------|
+| `All`          | All enumerated windows |
+| `SmartProcess` | Windows whose `ProcessName` matches `folder.ProcessFilter` (case-insensitive) |
+| `SmartClass`   | Windows whose `ClassName` matches `folder.ClassNameFilter` (case-insensitive) |
+| `SmartRules`   | Windows matched by `folder.Rules.Matches(w)`; falls back to all windows when `Rules` is `null` |
+| `Manual`       | Windows whose `Handle` is in `folder.ManualWindowHandles` |
+| `Clipboard`    | No-op — collection left empty |
+| `RecycleBin`   | No-op — collection left empty |
+
+---
+
+### `CreateSmartProcessFolder(string, string, string, string)`
+
+Creates a new **smart folder** that automatically populates itself with all windows belonging to a specific process.
+
+```csharp
+public WindowFolder CreateSmartProcessFolder(
+    string name,
+    string processName,
+    string icon = "\uE756",
+    string bgColor = "#2D3A2D")
+```
+
+<ParamField path="name" type="string" required>
+  Display name shown in the folder sidebar (e.g. `"Chrome"`).
+</ParamField>
+
+<ParamField path="processName" type="string" required>
+  The process name to filter by — case-insensitive match against `WindowInfo.ProcessName` (e.g. `"chrome"`, `"Code"`).
+</ParamField>
+
+<ParamField path="icon" type="string" default='"\uE756"'>
+  Segoe MDL2 / Fluent icon glyph. Defaults to the Tag icon (`\uE756`).
+</ParamField>
+
+<ParamField path="bgColor" type="string" default='"#2D3A2D"'>
+  Hex background tint applied to the folder tile. Defaults to a dark green.
+</ParamField>
+
+<ResponseField name="return" type="WindowFolder">
+  The newly created folder, already appended to `Folders` with `SortOrder` set to the current collection count.
+</ResponseField>
+
+---
+
+### `CreateManualFolder(string, string, string)`
+
+Creates a new **manual folder** where windows are assigned explicitly by the user rather than matched by a rule.
+
+```csharp
+public WindowFolder CreateManualFolder(
+    string name,
+    string icon = "\uE8B7",
+    string bgColor = "#2D2D3D")
+```
+
+<ParamField path="name" type="string" required>
+  Display name for the folder.
+</ParamField>
+
+<ParamField path="icon" type="string" default='"\uE8B7"'>
+  Segoe MDL2 icon glyph. Defaults to the Folder icon (`\uE8B7`).
+</ParamField>
+
+<ParamField path="bgColor" type="string" default='"#2D2D3D"'>
+  Hex background tint. Defaults to a dark blue-grey.
+</ParamField>
+
+<ResponseField name="return" type="WindowFolder">
+  The newly created folder, appended to `Folders`.
+</ResponseField>
+
+---
+
+### `CreateSmartRulesFolder(string, FolderRuleGroup, string, string)`
+
+Creates a **composite rules folder** (v2 smart folder) that evaluates multiple conditions with AND/OR logic via a `FolderRuleGroup`.
+
+```csharp
+public WindowFolder CreateSmartRulesFolder(
+    string name,
+    FolderRuleGroup rules,
+    string icon = "\uE756",
+    string bgColor = "#2D3A2D")
+```
+
+<ParamField path="name" type="string" required>
+  Display name for the folder.
+</ParamField>
+
+<ParamField path="rules" type="FolderRuleGroup" required>
+  The composite rule group. Each condition in the group is evaluated by calling `rules.Matches(WindowInfo)`.
+</ParamField>
+
+<ParamField path="icon" type="string" default='"\uE756"'>
+  Segoe MDL2 icon glyph.
+</ParamField>
+
+<ParamField path="bgColor" type="string" default='"#2D3A2D"'>
+  Hex background tint. Defaults to a dark green.
+</ParamField>
+
+<ResponseField name="return" type="WindowFolder">
+  The newly created folder, appended to `Folders`.
+</ResponseField>
+
+---
+
+### `CreateClipboardFolder()`
+
+Creates the special **Clipboard History** folder and appends it to `Folders`.
+
+```csharp
+public WindowFolder CreateClipboardFolder()
+```
+
+<ResponseField name="return" type="WindowFolder">
+  A new `WindowFolder` with `Type = FolderType.Clipboard`, `Name = "Clipboard"`, icon `\uE8C8` (Copy), and background `#2A2A3D`.
+</ResponseField>
+
+<Note>
+  This is a singleton folder — only one Clipboard folder should exist at a time. `RemoveFolder` will refuse to delete it, so you must ensure `CreateClipboardFolder()` is not called more than once during a session. Check for an existing `FolderType.Clipboard` entry in `Folders` before calling.
+</Note>
+
+---
+
+### `CreateRecycleBinFolder()`
+
+Creates the special **Recycle Bin** folder and appends it to `Folders`. Clicking this folder in the overlay opens the Windows Recycle Bin shell view and hides the overlay.
+
+```csharp
+public WindowFolder CreateRecycleBinFolder()
+```
+
+<ResponseField name="return" type="WindowFolder">
+  A new `WindowFolder` with `Type = FolderType.RecycleBin`, `Name = "Recycle Bin"`, icon `\uE74D` (Delete), and background `#2A2A2A`.
+</ResponseField>
+
+<Note>
+  Like the Clipboard folder, this is a singleton — only one Recycle Bin folder should exist at a time. Check for an existing `FolderType.RecycleBin` entry in `Folders` before calling.
+</Note>
+
+---
+
+### `RemoveFolder(string)`
+
+Removes a folder from `Folders` by its unique `Id` string.
+
+```csharp
+public bool RemoveFolder(string folderId)
+```
+
+<ParamField path="folderId" type="string" required>
+  The `WindowFolder.Id` (a `Guid` string) of the folder to remove.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `true` if the folder was found and successfully removed; `false` if the folder was not found or is a protected built-in type.
+</ResponseField>
+
+<Warning>
+  The following folder types are **protected** and cannot be removed with this method — `RemoveFolder` will return `false` without making any changes:
+
+  - `FolderType.All` — the built-in "All Windows" folder
+  - `FolderType.Clipboard` — the Clipboard History folder
+  - `FolderType.RecycleBin` — the Recycle Bin folder
+</Warning>
+
+---
+
+### `LoadFromSettings(AppSettings)`
+
+Restores the full folder list from a previously saved `AppSettings` object. The current `Folders` collection is cleared and rebuilt from scratch.
+
+```csharp
+public void LoadFromSettings(AppSettings settings)
+```
+
+<ParamField path="settings" type="AppSettings" required>
+  The settings object to read folders from. Folders with `Type == FolderType.All` present in `settings.Folders` are ignored — a fresh All Windows folder is always prepended.
+</ParamField>
+
+The load sequence is:
+1. `Folders.Clear()`
+2. Add a new All Windows folder at `SortOrder = 0`
+3. Add all non-`All` folders from `settings.Folders`, ordered by `SortOrder` ascending
+
+---
+
+### `SaveToSettings(AppSettings)`
+
+Writes the current folder list (excluding the All Windows folder) to `settings.Folders`, re-numbering `SortOrder` values starting from 1.
+
+```csharp
+public void SaveToSettings(AppSettings settings)
+```
+
+<ParamField path="settings" type="AppSettings" required>
+  The settings object whose `Folders` list will be replaced. The All Windows folder (`FolderType.All`) is excluded from the saved list since it is always reconstructed on load.
+</ParamField>
+
+<Note>
+  `SortOrder` values are reassigned as `1, 2, 3, …` in the current display order when saving — any previous `SortOrder` values are discarded.
+</Note>

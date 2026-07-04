@@ -1,47 +1,105 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with BetterWinTab in 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Learn how to open the overlay, navigate windows with keyboard shortcuts, create your first Smart Folder, and customize your hotkey in BetterWinTab."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+BetterWinTab is designed to be productive within seconds of first launch. This quickstart walks you through opening the overlay, navigating and searching your windows, creating your first Smart Folder to group related apps, and remapping the activation hotkey to whatever fits your workflow best.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+## Before You Begin
 
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+Make sure BetterWinTab is installed and running. You should see its icon in the Windows system tray (notification area). If you have not installed it yet, visit the [Installation](/installation) guide first.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Open the overlay">
+    Press **`Ctrl + Tab`** from anywhere on your desktop. The BetterWinTab overlay appears centered on your screen, listing all open windows grouped by folder.
 
-    ```bash
-    npm install your-package
-    ```
+    Press **`Ctrl + Tab`** again (or press **`Esc`**) to close the overlay without changing focus.
+
+    <Note>
+      The default hotkey is `Ctrl + Tab`. If this conflicts with another app or you prefer a different shortcut, see Step 5 to change it.
+    </Note>
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+  <Step title="Navigate windows with the keyboard">
+    Once the overlay is open, you never need to touch the mouse:
+
+    | Key | Action |
+    |---|---|
+    | `Arrow keys` | Move the selection between windows in the current folder |
+    | `Tab` | Move to the next folder |
+    | `Shift + Tab` | Move to the previous folder |
+    | `Enter` | Focus the selected window and close the overlay |
+    | `Delete` | Close the selected window |
+    | `F5` | Refresh the window list |
+    | `Esc` | Clear the current search, or close the overlay if search is already empty |
+
+    Navigate to any window with the arrow keys and press `Enter` to jump straight to it.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
-    ```
+  <Step title="Search instantly by typing">
+    With the overlay open, just start typing — no need to click a search box first. Any alphanumeric character (`0–9`, `a–z`, `A–Z`) begins a search immediately.
+
+    BetterWinTab's fuzzy matcher searches across **window titles**, **app names**, and **process names** in real time. The list narrows as you type. The matcher is typo-tolerant, so imperfect or fast typing still finds the right window.
+
+    <Tip>
+      You do not need to type an exact match. Type `"cod"` to find VS Code windows, `"ch"` for Chrome, or `"term"` for any terminal. The moment you see the window you want, press `Enter` to focus it.
+    </Tip>
+
+    When your search returns no open windows, BetterWinTab automatically switches to **App Launcher** mode and shows matching installed programs. Press `Enter` to launch one.
+
+    Press `Esc` to clear your search and return to the full window list.
+  </Step>
+
+  <Step title="Create your first Smart Folder">
+    Smart Folders automatically collect windows that match a rule — for example, all VS Code windows — so they always appear grouped together without any manual dragging.
+
+    1. Open the overlay and click the **Settings** icon, or right-click the system tray icon and choose **Settings**.
+    2. Navigate to the **Folders** section.
+    3. Click **Add Folder** and choose **Smart Folder (Process)**.
+    4. Give the folder a name (for example, `Code`) and set the **process name** filter to `Code` (which matches `Code.exe`, the VS Code process).
+    5. Save. The folder now appears in the overlay and automatically contains every VS Code window that is open — including new ones you open later.
+
+    You can create as many Smart Folders as you need: one for browsers, one for terminals, one for communication apps, and so on. You can also create **manual folders** and assign windows to them by hand for full control over grouping.
+  </Step>
+
+  <Step title="Change the activation hotkey">
+    If `Ctrl + Tab` conflicts with another app or you simply prefer a different shortcut:
+
+    1. Open **Settings** (tray icon → Settings, or from within the overlay).
+    2. Go to **General**.
+    3. Find the **Hotkey** field and click it to activate recording mode.
+    4. Press the key combination you want — for example `Ctrl + Space` or `Alt + \``.
+    5. The field updates immediately. Close Settings — your new hotkey is now active system-wide.
+
+    <Note>
+      The hotkey is stored in your user settings as a modifier flags value (`HotkeyModifiers`) and a virtual key code (`HotkeyVKey`). It is registered as a global Windows hotkey, so it works even when BetterWinTab does not have focus.
+    </Note>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Full Keyboard Shortcut Reference
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+| Shortcut | Action |
+|---|---|
+| `Ctrl + Tab` | Show or hide the overlay (default activation hotkey — customizable) |
+| `Tab` | Move to the next folder |
+| `Shift + Tab` | Move to the previous folder |
+| `Arrow keys` | Move the selection between windows |
+| `Enter` | Focus the selected window, or launch the selected app |
+| `Esc` | Clear search input, or close the overlay if search is empty |
+| `F5` | Refresh the window list |
+| `Delete` | Close the selected window |
+| `0–9`, `a–z`, `A–Z` | Start typing instantly to search — no need to click the search box |
+| `Tab` *(while searching)* | Toggle search mode between **All windows** and **Apps** (app launcher) |
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Smart Folders in Depth" icon="folder-open" href="/introduction">
+    Learn about all folder types, rule options, and how manual and smart folders interact.
+  </Card>
+  <Card title="Themes & Customization" icon="palette" href="/introduction">
+    Customize accent colors, background, surfaces, and every semantic color token to match your desktop.
+  </Card>
+</CardGroup>

@@ -1,0 +1,88 @@
+---
+title: "Clipboard History: Access Recent Entries from the Overlay"
+sidebarTitle: "Clipboard History"
+description: "BetterWinTab tracks clipboard text entries and lets you browse, pin, and paste recent items directly from the overlay without switching apps."
+---
+
+BetterWinTab includes a built-in clipboard history panel accessible from the overlay. Every text entry you copy anywhere on your desktop is captured automatically, so you can retrieve anything you copied in the current session without switching to the source application. The panel is keyboard-navigable — move through entries with the arrow keys and press `Enter` or click to put an item back on the clipboard.
+
+## Accessing Clipboard History
+
+The clipboard history lives in the special **Clipboard** folder (`FolderType.Clipboard`), pinned in the sidebar. To open it:
+
+1. Press `Ctrl+Tab` to open the overlay.
+2. Press `Tab` / `Shift+Tab` to navigate the sidebar until the **Clipboard** entry is highlighted, or click it directly.
+3. The window grid is replaced by the clipboard history panel showing recent entries, newest first.
+4. Use `Arrow Up` / `Arrow Down` to navigate between items.
+5. Press `Enter` or click an item to copy it to the clipboard (a "Copied!" toast appears briefly to confirm).
+
+## What Is Tracked
+
+<Note>
+**v1 behavior — text only.** BetterWinTab captures all text clipboard entries. Images are detected and tracked with a placeholder entry showing `[Image]`, but the image data itself is not stored persistently — only a `BitmapImage` preview is loaded asynchronously for display. Images cannot be re-pasted from the history panel in v1.
+</Note>
+
+Each captured text entry is stored as a `ClipboardItem`:
+
+| Property | Type | Description |
+|---|---|---|
+| `Id` | `string` | Unique GUID string for the entry |
+| `Text` | `string?` | The captured text content |
+| `IsImage` | `bool` | `true` for image clipboard events |
+| `ImageSource` | `BitmapImage?` | Asynchronously loaded bitmap preview (image entries only) |
+| `CapturedAt` | `DateTime` | Timestamp of when the entry was captured |
+| `Preview` | `string` | Truncated to 120 chars; falls back to `"[Image]"` for images |
+| `SingleLinePreview` | `string` | Newlines replaced with spaces, truncated to 80 chars |
+| `TimeAgo` | `string` | Human-readable age: `"just now"`, `"5m ago"`, `"2h ago"`, or a date string |
+| `SizeInfo` | `string` | Character count for text; `"Image"` for image entries |
+| `IsPinned` | `bool` | Whether the item is pinned to survive app restarts |
+
+**Deduplication:** if you copy the same text twice, BetterWinTab moves the existing entry to the top of the list rather than adding a duplicate. This keeps the history clean during repetitive copy-paste workflows.
+
+## History Settings
+
+| Setting | Default | Description |
+|---|---|---|
+| `ClipboardHistoryEnabled` | `true` | Master toggle. When disabled, the Clipboard folder is removed from the sidebar and no new entries are captured. |
+| `ClipboardHistoryMaxItems` | `50` | Maximum number of entries to retain. Older items are trimmed from the bottom of the list when the limit is reached. |
+
+Both settings are configurable in **Settings → General**.
+
+## Pinned Clipboard Items
+
+<Tip>
+Pin clipboard entries you use repeatedly — code snippets, addresses, boilerplate text — so they survive BetterWinTab restarts. Pinned items always appear at the top of the history panel, separated from regular entries.
+</Tip>
+
+Pinning an item marks it with `IsPinned = true` and adds its `Text` to `AppSettings.PinnedClipboardItems` (a `List<string>`) which is persisted to disk. On the next launch, BetterWinTab restores pinned items into the `ClipboardService.History` collection before regular session entries.
+
+Pinned items are **never trimmed** by the `ClipboardHistoryMaxItems` limit.
+
+## How ClipboardService Works
+
+`ClipboardService` monitors the clipboard using the Win32 `AddClipboardFormatListener` API, which registers a window handle to receive `WM_CLIPBOARDUPDATE` messages whenever any application changes the clipboard content.
+
+```csharp
+// Registers the overlay HWND to receive WM_CLIPBOARDUPDATE
+AddClipboardFormatListener(hwnd);
+```
+
+When a `WM_CLIPBOARDUPDATE` message arrives:
+
+1. `ClipboardService.ProcessMessage(msg)` checks the message code and calls `CaptureClipboard()`.
+2. `CaptureClipboard()` opens the clipboard with `OpenClipboard`, reads the data for `CF_UNICODETEXT` (Unicode text) or detects `CF_BITMAP`/`CF_DIB` (image), then closes the clipboard.
+3. For text: a new `ClipboardItem` is created and inserted at index 0 of the `History` observable collection, or the existing duplicate entry is moved to the top.
+4. For images: a placeholder `ClipboardItem` with `IsImage = true` is inserted, and the actual `BitmapImage` preview is loaded asynchronously on the UI thread via the WinRT `Clipboard.GetContent()` API.
+5. `TrimHistory()` removes the oldest items if the count exceeds `ClipboardHistoryMaxItems`.
+
+### Self-Copy Prevention
+
+When you select a history entry and press `Enter`, BetterWinTab calls `ClipboardService.CopyToClipboard(item)`, which writes the text back to the clipboard via Win32. To prevent this programmatic write from creating a duplicate history entry, the service sets an internal `_selfCopying` flag before calling `OpenClipboard`. Any `WM_CLIPBOARDUPDATE` message received while `_selfCopying` is `true` is silently ignored.
+
+### Image Debouncing
+
+Some applications fire multiple `WM_CLIPBOARDUPDATE` messages for a single image copy. `ClipboardService` debounces image captures with a 500 ms minimum interval between image entries, discarding rapid duplicates.
+
+### Stopping the Listener
+
+`ClipboardService` implements `IDisposable`. Calling `Dispose()` — or explicitly calling `Stop()` — unregisters the HWND via `RemoveClipboardFormatListener`. The service is automatically disposed when the BetterWinTab overlay window is closed.

@@ -1,0 +1,205 @@
+---
+title: "UpdateService API Reference"
+sidebarTitle: "UpdateService"
+description: "UpdateService checks the BetterWinTab GitHub Releases API for newer versions and downloads and launches the installer automatically."
+---
+
+`UpdateService` provides self-update capabilities by querying the [GitHub Releases API](https://api.github.com/repos/sgm1018/BetterWinTab/releases/latest) for the latest published release, comparing it against the running assembly version, and streaming the installer to `%TEMP%` before launching it via the Windows shell. The service is designed to be called once at startup for a background check and optionally on-demand for user-initiated downloads.
+
+<Note>
+  The GitHub unauthenticated API rate limit is **60 requests per hour per IP address**. `CheckAsync` makes one request per call. No authentication token is sent — keep polling intervals reasonable (e.g. once per application launch).
+</Note>
+
+---
+
+## Static property
+
+### `CurrentVersion`
+
+```csharp
+public static string CurrentVersion { get; }
+```
+
+The version string of the running assembly, resolved once at class initialization. Resolution priority:
+
+1. `AssemblyInformationalVersionAttribute` — build metadata suffix (`+abc123`) is stripped and the result is validated as a `System.Version`.
+2. `Assembly.GetName().Version` — formatted as `Major.Minor.Build` (Build clamped to `≥ 0`).
+3. Falls back to `"0.0.0"` if no version information is available.
+
+The leading `v`/`V` prefix is always stripped so version strings are plain semver (e.g. `"1.2.3"`).
+
+---
+
+## Properties
+
+### `IsUpdateAvailable`
+
+```csharp
+public bool IsUpdateAvailable { get; private set; }
+```
+
+Set to `true` by `CheckAsync` when the latest GitHub release version is semantically newer than `CurrentVersion`. Starts as `false` and is never reset to `false` within a session.
+
+---
+
+### `LatestVersion`
+
+```csharp
+public string LatestVersion { get; private set; }
+```
+
+The version tag of the latest release found by `CheckAsync`, with the leading `v`/`V` stripped (e.g. `"1.4.0"`). Initialized to `CurrentVersion` before any check is performed.
+
+---
+
+### `InstallerDownloadUrl`
+
+```csharp
+public string? InstallerDownloadUrl { get; }
+```
+
+The direct download URL for the release asset selected for the current machine. `null` until `CheckAsync` finds a newer release with a matching asset. Asset selection order:
+
+1. An `.exe` asset whose name contains `x64` (case-insensitive)
+2. An `.exe` asset whose name contains `arm64`
+3. Any `.exe` asset
+
+---
+
+## Events
+
+### `StateChanged`
+
+```csharp
+public event Action? StateChanged;
+```
+
+Fired by `CheckAsync` immediately after `IsUpdateAvailable` is set to `true`. Raised on the **calling thread** (the `await` continuation thread — typically a thread pool thread). Marshal to the UI thread if updating UI elements.
+
+```csharp
+updateService.StateChanged += () =>
+{
+    _dispatcherQueue.TryEnqueue(() =>
+    {
+        UpdateBadge.Visibility = Visibility.Visible;
+    });
+};
+```
+
+---
+
+## Types
+
+### `DownloadProgress`
+
+```csharp
+public sealed record DownloadProgress(
+    string Message,
+    int? Percentage = null,
+    bool IsIndeterminate = false);
+```
+
+Progress reporting type passed to the `IProgress<DownloadProgress>` callback of `DownloadAndInstallAsync`.
+
+<ResponseField name="Message" type="string">
+  Human-readable status description suitable for display in a progress dialog (e.g. `"Downloading installer..."`, `"Download complete. Launching installer..."`).
+</ResponseField>
+
+<ResponseField name="Percentage" type="int?">
+  Download completion percentage from `0` to `100`. `null` when the server does not provide a `Content-Length` header.
+</ResponseField>
+
+<ResponseField name="IsIndeterminate" type="bool">
+  `true` during phases where progress cannot be quantified (connection setup, size-unknown download). Bind to an indeterminate `ProgressBar` or `ProgressRing` when this is `true`.
+</ResponseField>
+
+---
+
+## Methods
+
+### `CheckAsync(CancellationToken)`
+
+Asynchronously queries the GitHub Releases API and sets `IsUpdateAvailable`, `LatestVersion`, and `InstallerDownloadUrl` if a newer version is found. Any network or parsing failure is caught and written to `Debug.WriteLine` — the method never throws.
+
+```csharp
+public async Task CheckAsync(CancellationToken ct = default)
+```
+
+<ParamField path="ct" type="CancellationToken" default="default">
+  Optional cancellation token. Cancels the HTTP request and deserialization.
+</ParamField>
+
+**API endpoint:** `https://api.github.com/repos/sgm1018/BetterWinTab/releases/latest`
+
+**HTTP client configuration:**
+- Timeout: `15 seconds`
+- `User-Agent: BetterWinTab-Updater/{CurrentVersion}`
+- `Accept: application/vnd.github+json`
+- `X-GitHub-Api-Version: 2022-11-28`
+
+**Version comparison:** Uses `System.Version` parsing for semantic comparison (`r > l`). Falls back to case-insensitive string equality when either string cannot be parsed as a `Version`.
+
+**Example:**
+
+```csharp
+await updateService.CheckAsync();
+
+if (updateService.IsUpdateAvailable)
+{
+    Console.WriteLine($"Update available: {updateService.LatestVersion}");
+}
+```
+
+---
+
+### `DownloadAndInstallAsync(IProgress<DownloadProgress>?, CancellationToken)`
+
+Streams the installer binary from `InstallerDownloadUrl` to `%TEMP%\{filename}`, then launches it via `Process.Start` with `UseShellExecute = true`. Returns `false` immediately if no installer URL is available.
+
+```csharp
+public async Task<bool> DownloadAndInstallAsync(
+    IProgress<DownloadProgress>? progress = null,
+    CancellationToken ct = default)
+```
+
+<ParamField path="progress" type="IProgress<DownloadProgress>?" default="null">
+  Optional progress sink. Receives `DownloadProgress` records throughout the download lifecycle. Pass an `IProgress<T>` implementation backed by a UI control to show a progress bar or dialog. When `null`, the download proceeds silently.
+</ParamField>
+
+<ParamField path="ct" type="CancellationToken" default="default">
+  Optional cancellation token. Cancels the in-progress stream read. The partial file on disk is not cleaned up automatically on cancellation.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `true` if the download completed and the installer was launched. `false` if `InstallerDownloadUrl` is `null` or empty (i.e. `CheckAsync` was not called or found no update).
+</ResponseField>
+
+The download uses a **separate `HttpClient`** with an infinite timeout (`Timeout.InfiniteTimeSpan`) and an 80 KB streaming buffer. The filename is derived from the URL path — if the path segment is empty, it defaults to `BetterWinTab-Setup-{LatestVersion}-x64.exe`.
+
+**Progress lifecycle:**
+
+| Phase | `Message` | `Percentage` | `IsIndeterminate` |
+|-------|-----------|-------------|-------------------|
+| Setup | `"Preparing installer download..."` | `0` | `true` |
+| Connecting | `"Connecting to the release server..."` | `0` | `true` |
+| Downloading (known size) | `"Downloading installer..."` | `0–100` | `false` |
+| Downloading (unknown size) | `"Downloading installer (size unknown)..."` | `null` | `true` |
+| Complete | `"Download complete. Launching installer..."` | `100` | `false` |
+| Launched | `"Installer opened. Follow the installation steps."` | `100` | `false` |
+
+**Example with progress:**
+
+```csharp
+var progress = new Progress<DownloadProgress>(p =>
+{
+    _dispatcherQueue.TryEnqueue(() =>
+    {
+        StatusText.Text = p.Message;
+        if (p.Percentage.HasValue)
+            DownloadBar.Value = p.Percentage.Value;
+        DownloadBar.IsIndeterminate = p.IsIndeterminate;
+    });
+});
+
+bool launched = await updateService.DownloadAndInstallAsync(progress);
+```

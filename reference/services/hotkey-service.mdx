@@ -1,0 +1,148 @@
+---
+title: "HotkeyService API Reference"
+sidebarTitle: "HotkeyService"
+description: "HotkeyService installs a low-level keyboard hook to capture the BetterWinTab activation hotkey globally. Documents Configure, Install, Uninstall, and event members."
+---
+
+`HotkeyService` provides global hotkey detection by installing a **WH_KEYBOARD_LL** low-level keyboard hook via the Win32 `SetWindowsHookEx` API. When the configured key combination is pressed anywhere in the system, the service fires `HotkeyPressed` on the WinUI 3 dispatcher thread. It also monitors for **Alt+Tab** and **Win+Tab** so the overlay can automatically hide when the user switches to the native Windows task switcher.
+
+<Note>
+  BetterWinTab uses `WH_KEYBOARD_LL` rather than `RegisterHotKey` because Windows internally reserves `Ctrl+Tab` — `RegisterHotKey` silently fails for that combination. The low-level hook intercepts keystrokes before Windows routing, making it reliable for any key combination including system-reserved ones.
+</Note>
+
+---
+
+## Events
+
+### `HotkeyPressed`
+
+```csharp
+public event Action? HotkeyPressed;
+```
+
+Raised on the UI thread (via `DispatcherQueue.TryEnqueue`) whenever the configured hotkey combination is detected. Includes a **300 ms debounce** — repeated presses within the cooldown window are silently discarded to prevent rapid-fire overlay toggles.
+
+The keystroke that triggers this event is **consumed** (the hook returns `1`), so no other application receives it.
+
+---
+
+### `HideOverlayRequested`
+
+```csharp
+public event Action? HideOverlayRequested;
+```
+
+Raised on the UI thread when **Alt+Tab** or **Win+Tab** is pressed while the BetterWinTab overlay is visible (determined by the `IsOverlayVisible` delegate). Signals the overlay to close so it does not compete with the native Windows task switcher.
+
+<Note>
+  Unlike the configured hotkey, **Alt+Tab and Win+Tab keystrokes are NOT consumed** — they are passed through to Windows normally via `CallNextHookEx`. The native task switcher continues to function as expected.
+</Note>
+
+---
+
+## Properties
+
+### `IsOverlayVisible`
+
+```csharp
+public Func<bool>? IsOverlayVisible;
+```
+
+A delegate set by the App layer that returns `true` when the BetterWinTab overlay window is currently displayed. The hook callback reads this value to decide whether to fire `HideOverlayRequested`. If the delegate is `null` or returns `false`, Alt+Tab and Win+Tab presses are passed through silently without raising any event.
+
+---
+
+## Methods
+
+### `Configure(uint, uint)`
+
+Sets the key combination that will trigger `HotkeyPressed`. Can be called at any time — the new combination takes effect immediately on the next keystroke processed by the hook.
+
+```csharp
+public void Configure(uint modifiers, uint vKey)
+```
+
+<ParamField path="modifiers" type="uint" required>
+  A bitmask of modifier keys that must be held when `vKey` is pressed. Combine flags with bitwise OR:
+
+  | Flag | Value | Key |
+  |------|-------|-----|
+  | `MOD_ALT` | `0x0001` | Alt |
+  | `MOD_CONTROL` | `0x0002` | Ctrl |
+  | `MOD_SHIFT` | `0x0004` | Shift |
+  | `MOD_WIN` | `0x0008` | Windows key |
+
+  Default value: `0x0002` (Ctrl only).
+</ParamField>
+
+<ParamField path="vKey" type="uint" required>
+  The virtual key code of the trigger key. Default: `0x09` (`VK_TAB`). Standard Win32 virtual key constants apply (e.g. `0x41` = A, `0xBE` = `.`).
+</ParamField>
+
+**Example — change to Ctrl+Shift+Space:**
+
+```csharp
+hotkeyService.Configure(
+    modifiers: 0x0002 | 0x0004, // MOD_CONTROL | MOD_SHIFT
+    vKey: 0x20                  // VK_SPACE
+);
+```
+
+---
+
+### `Install(DispatcherQueue)`
+
+Installs the WH_KEYBOARD_LL keyboard hook and begins listening for keypresses. Must be called from the WinUI 3 UI thread.
+
+```csharp
+public bool Install(DispatcherQueue dispatcherQueue)
+```
+
+<ParamField path="dispatcherQueue" type="DispatcherQueue" required>
+  The WinUI 3 `DispatcherQueue` used to marshal `HotkeyPressed` and `HideOverlayRequested` callbacks onto the UI thread. Obtain this from `DispatcherQueue.GetForCurrentThread()` on the UI thread.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `true` if the hook was installed successfully; `false` if `SetWindowsHookEx` returned a null handle (e.g. insufficient permissions or hook already installed).
+</ResponseField>
+
+<Warning>
+  `Install` **must be called from the UI thread**. The hook delegate is held in a field to prevent garbage collection — this is critical because a collected `LowLevelKeyboardProc` delegate causes an access violation at the next keystroke. Do not pass the callback as a lambda; the service handles this internally.
+</Warning>
+
+---
+
+### `Uninstall()`
+
+Removes the keyboard hook by calling `UnhookWindowsHookEx`. Safe to call even if the hook was never installed or was already removed.
+
+```csharp
+public void Uninstall()
+```
+
+After `Uninstall()` returns, no further `HotkeyPressed` or `HideOverlayRequested` events will be fired. The service can be reinstalled by calling `Install` again.
+
+---
+
+### `Dispose()`
+
+Calls `Uninstall()` and releases the internal hook delegate reference, allowing the delegate to be garbage collected. Implements `IDisposable` — use within a `using` block or call explicitly during application shutdown.
+
+```csharp
+public void Dispose()
+```
+
+---
+
+## Modifier key detection
+
+The hook uses `GetAsyncKeyState` to sample the physical state of each modifier key at the moment the trigger key is pressed. Both left and right variants of Ctrl and Win are checked independently:
+
+| Modifier flag | Keys checked |
+|---------------|-------------|
+| `MOD_CONTROL` (`0x0002`) | `VK_LCONTROL` + `VK_RCONTROL` |
+| `MOD_ALT` (`0x0001`) | `VK_MENU` (either Alt) |
+| `MOD_SHIFT` (`0x0004`) | `VK_SHIFT` (either Shift) |
+| `MOD_WIN` (`0x0008`) | `VK_LWIN` + `VK_RWIN` |
+
+A modifier check passes if **at least one** of its associated keys is physically held.

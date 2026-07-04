@@ -1,0 +1,98 @@
+---
+title: "Real-Time Fuzzy Search Across All Open Windows"
+sidebarTitle: "Fuzzy Search"
+description: "BetterWinTab's fuzzy matcher filters every open window instantly as you type — typo-tolerant and designed for fast, imperfect input under pressure."
+---
+
+BetterWinTab's search is built for speed and forgiveness. The moment the overlay is open, you can start filtering without moving your hands to the mouse — just type. The fuzzy matcher tolerates transpositions and skipped characters, so partial or slightly misspelled queries still surface the right window. A search for `"gihub"` will find a Chrome window titled **"github.com/sgm1018"** without any special configuration.
+
+## Activating Search
+
+<Tip>
+Press `Ctrl+Tab` to open the overlay, then immediately type any letter or digit. BetterWinTab captures the keypress and places it in the search bar automatically — there is no need to click or tab to the search box. Your fingers never have to leave the home row.
+</Tip>
+
+The moment any alphanumeric character is typed, the overlay automatically switches to the **All Windows** folder scope so results are never limited to the folder you were browsing. Your previous folder selection is remembered and restored when you press `Esc` to clear the search.
+
+## What Gets Searched
+
+Each window is matched against the following fields simultaneously:
+
+| Field | Source |
+|---|---|
+| Window title | `WindowInfo.Title` |
+| Process name | `WindowInfo.ProcessName` |
+
+The search is **multi-word**: space-separated tokens in the query are evaluated independently. Each token must independently fuzzy-match at least one of the above fields — then the per-token scores are summed. For example, searching `"google chrome"` can match a window where `"google"` matches the title and `"chrome"` matches the process name.
+
+Window class names (`ClassName`) are intentionally excluded from search to avoid false positives — many Electron apps share the class `Chrome_WidgetWin_1`.
+
+## The FuzzyMatcher Service
+
+The `FuzzyMatcher` static class (`Services/FuzzyMatcher.cs`) implements an fzf-inspired character-skipping matcher. Calling `FuzzyMatcher.Score(text, query)` returns:
+
+- **`-1`** if the query has no match (not all query characters appear in order in the text).
+- **`≥ 0`** if the query matches — a higher score means a better match.
+
+### Scoring Breakdown
+
+The scorer reads through the text left-to-right and tries to consume every character in the query in order. Each character match contributes to the score through several bonuses:
+
+| Bonus / Penalty | Amount | Trigger |
+|---|---|---|
+| Base match | `+10` | Each matched character |
+| Consecutive run | `+(consecutive × 5)` | Matching characters that are adjacent to each other |
+| Word boundary | `+20` | Match at position 0, or after a space, `-`, `_`, `.`, `/`, or `\` |
+| Case-exact | `+2` | Matched character has the same case as the query character |
+| Early first match | `+max(0, 50 − firstMatchIndex × 3)` | Rewards matches that start near the beginning of the text |
+| Length penalty | `−(text.Length − query.Length) / 4` | Prefers shorter texts (fewer unmatched characters) |
+
+Scores are clamped to a minimum of 0.
+
+### Exact Substring Wins
+
+`FuzzyMatcher.MatchWithFallback(text, query)` first checks for an exact substring match using `String.Contains` (case-insensitive). If found, it returns a score of `1000 + (100 − text.Length)`, which always outranks any purely fuzzy score. This means typing `"VS Code"` will rank the VS Code window above fuzzier matches even if those have high character-scoring bonuses.
+
+### Multi-Word Matching
+
+`FuzzyMatcher.MultiWordMatch(fields[], query)` splits the query on whitespace and requires that each word independently matches at least one of the provided fields. If any word matches nothing, the overall result is `(false, -1)`.
+
+```csharp
+// Example: "google crome" against a Chrome window
+FuzzyMatcher.MultiWordMatch(
+    new[] { "Google Gemini - Brave", "chrome", "Chrome_WidgetWin_1" },
+    "google crome"
+);
+// "google" → exact match in title field
+// "crome"  → fuzzy match in process name "chrome"
+// Result: (true, combined_score)
+```
+
+## Search Modes
+
+When the search bar is active, pressing `Tab` toggles between two modes:
+
+| Mode | Label | Behavior |
+|---|---|---|
+| All windows | **All** | Filters `WindowInfo` objects across all open windows using fuzzy matching |
+| Apps mode | **Apps** | Switches to the app launcher — searches installed Start Menu shortcuts instead of open windows |
+
+The current mode is shown as a small **All** / **Apps** badge next to the search bar. Switching to Apps mode clears the window grid and populates the launch suggestions panel instead.
+
+## Example Scenario
+
+Suppose you have 20+ windows open and want to get back to a GitHub pull-review tab in Chrome:
+
+1. Press `Ctrl+Tab` — overlay opens on All Windows.
+2. Type `"ghpr"` — the fuzzy matcher finds Chrome windows whose titles contain words like "GitHub", "pull", "request".
+3. Arrow keys to the right card if needed.
+4. Press `Enter` — Chrome window comes to the foreground; overlay closes.
+
+Total time: under 2 seconds from any app.
+
+## Clearing Search
+
+- **First `Esc` press** — clears the search query and restores the folder that was active before you started typing.
+- **Second `Esc` press** — closes the overlay entirely.
+
+This two-stage behavior means pressing `Esc` once never accidentally closes the overlay if you are mid-search.

@@ -1,0 +1,94 @@
+---
+title: "Build BetterWinTab from Source"
+sidebarTitle: "Building"
+description: "Set up your development environment and build BetterWinTab from source using .NET 8 and VS Code on Windows 10/11."
+---
+
+BetterWinTab is a native Windows application built with C#, .NET 8, and WinUI 3. Because it relies on native WinUI 3 and Win32 interop components, a few specific tools and settings are required to produce a working binary. This page walks you through every step from a fresh machine to a successful build.
+
+## Prerequisites
+
+| Tool | Required Version | Notes |
+|---|---|---|
+| Windows | 10 (19041+) or Windows 11 | Minimum build 19041 (20H1) |
+| .NET SDK | 8.0.x | Pinned via `global.json` (`8.0.100`, `rollForward: latestFeature`) |
+| Visual Studio Code | Any recent version | Recommended editor; C# Dev Kit extension advised |
+| Inno Setup | 6.x | **Only needed to build the installer** — not required for development builds |
+
+Verify your .NET SDK version before proceeding:
+
+```powershell
+dotnet --version
+```
+
+The output should start with `8.0`. If it does not, install the correct SDK from [dot.net](https://dotnet.microsoft.com/download/dotnet/8.0).
+
+## Setup and Build
+
+<Steps>
+  <Step title="Clone the repository">
+    ```powershell
+    git clone https://github.com/sgm1018/BetterWinTab.git
+    cd BetterWinTab
+    ```
+  </Step>
+
+  <Step title="Restore NuGet dependencies">
+    ```powershell
+    dotnet restore BetterWinTab.csproj
+    ```
+
+    This pulls in `Microsoft.WindowsAppSDK`, `Microsoft.Web.WebView2`, `CommunityToolkit.Mvvm`, and the other packages declared in `BetterWinTab.csproj`.
+  </Step>
+
+  <Step title="Build for x64">
+    <Warning>
+      **Always pass `-p:Platform=x64` when building.** BetterWinTab uses native WinUI 3 and Win32 interop libraries that require a concrete platform target. Omitting the flag causes MSBuild to fall back to a platform-neutral output that is missing required native binaries, and the application will fail to start.
+    </Warning>
+
+    ```powershell
+    dotnet build BetterWinTab.csproj -p:Platform=x64
+    ```
+
+    A successful build produces output at:
+
+    ```
+    bin\x64\Debug\net8.0-windows10.0.19041.0\
+    ```
+  </Step>
+
+  <Step title="Run the built executable">
+    ```powershell
+    Start-Process "bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\BetterWinTab.exe"
+    ```
+
+    Once the app is running, press **Ctrl+Tab** to show the overlay.
+  </Step>
+</Steps>
+
+## Build from VS Code
+
+VS Code is the recommended editor for BetterWinTab development. The repository ships a preconfigured `tasks.json` that wraps the correct build invocations.
+
+Press **Ctrl+Shift+B** to run the default build task (`build-x64`). This task first kills any running BetterWinTab process, then invokes `dotnet build` with the correct platform flag and MSBuild logging options.
+
+## Available VS Code Tasks
+
+All tasks are defined in `.vscode/tasks.json`. You can run any of them via **Ctrl+Shift+P → Tasks: Run Task**.
+
+| Task label | What it does |
+|---|---|
+| `build-x64` | Kills any running BetterWinTab process, then builds for x64. **Default build task** (Ctrl+Shift+B). |
+| `build` | Same as `build-x64` but not marked as the default build group. |
+| `kill-betterwintab` | Runs `Stop-Process -Name BetterWinTab -Force -ErrorAction SilentlyContinue` — useful as a standalone step. |
+| `run-x64` | Depends on `build-x64`, then launches the compiled `BetterWinTab.exe` via `Start-Process`. |
+| `publish` | Runs `dotnet publish` using the project's default publish profile. |
+| `watch` | Runs `dotnet watch run` with `Platform=x64` and `--runtime win-x64` for hot reload. |
+
+## Why x64 Only for Local Builds?
+
+The project declares three supported platforms — `x86`, `x64`, and `ARM64` — and all three are supported for [publishing release builds](/development/publishing). For local debug builds, however, only `x64` is practical:
+
+- The WinUI 3 / Windows App SDK native host components shipped in the NuGet packages require a resolved RID (`win-x64`) at build time.
+- `arm64` cross-compilation is not supported by the .NET SDK's WinUI tooling on a standard x64 development machine.
+- Release publish profiles (`.pubxml`) handle `win-x86` and `win-arm64` correctly because they are full self-contained publishes that bundle every native dependency.

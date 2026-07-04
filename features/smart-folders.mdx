@@ -1,0 +1,146 @@
+---
+title: "Smart Folders: Auto-Organize Windows by Rule"
+sidebarTitle: "Smart Folders"
+description: "Smart Folders automatically group open windows by process name, window class, or composite AND/OR rules. Create, configure, and combine conditions to match any window."
+---
+
+Smart Folders are the organizing principle behind BetterWinTab. Instead of presenting all open windows in a single flat list, the overlay groups them into named folders that fill themselves automatically based on rules you define — or manually based on your own judgment. Open a new VS Code window and it appears in your **VS Code** folder instantly, without dragging or clicking.
+
+## Folder Types
+
+Every folder has a `FolderType` that determines how it populates with windows. The full set of types is:
+
+<AccordionGroup>
+  <Accordion title="All (All Windows)">
+    **`FolderType.All`** is the single built-in folder that always appears first in the sidebar and always contains every open window, regardless of other folder rules. It cannot be removed or reordered past the top position. When you start a search from any folder, the overlay automatically switches to All Windows scope so that results span the entire desktop.
+
+    The filter summary for this type is: `All open windows`.
+  </Accordion>
+
+  <Accordion title="Manual">
+    **`FolderType.Manual`** folders are populated by user action — drag a window card from any other folder onto a Manual folder to assign it. Manual assignments are tracked by window handle in `ManualWindowHandles` (a `HashSet<IntPtr>`) and survive window refreshes (`F5`) for the duration of the session, because the same window handle persists as long as the process is running.
+
+    Use Manual folders when you want full control over which windows belong together — for example, grouping all windows related to a single client project regardless of which apps they come from.
+  </Accordion>
+
+  <Accordion title="SmartProcess">
+    **`FolderType.SmartProcess`** folders filter by **process executable name**. The comparison is case-insensitive. Any window whose `ProcessName` matches `ProcessFilter` is included automatically on every refresh.
+
+    Common examples:
+
+    | Folder Name | `ProcessFilter` value |
+    |---|---|
+    | VS Code | `Code` |
+    | Chrome | `chrome` |
+    | Explorer | `explorer` |
+    | Terminal | `WindowsTerminal` |
+    | Brave | `brave` |
+
+    The `GetFilterSummary()` method returns `"Process: {ProcessFilter}"` for display in the Settings panel.
+  </Accordion>
+
+  <Accordion title="SmartClass">
+    **`FolderType.SmartClass`** folders filter by **window class name** — the `lpszClassName` registered in the Win32 `WNDCLASSEX` structure. Class names are stable across window instances of the same application and are useful when multiple distinct processes share a single class, or when a process name is ambiguous.
+
+    The comparison is case-insensitive, matching against `WindowInfo.ClassName`. The `GetFilterSummary()` method returns `"Class: {ClassNameFilter}"`.
+  </Accordion>
+
+  <Accordion title="SmartRules (v2)">
+    **`FolderType.SmartRules`** folders use a **composite rule engine** (`FolderRuleGroup`) that supports multiple conditions combined with `AND` or `OR` logic. This is the most expressive folder type and the recommended choice for complex groupings.
+
+    See [How SmartRules Work](#how-smartrules-work) below for full details and an example.
+  </Accordion>
+
+  <Accordion title="Clipboard">
+    **`FolderType.Clipboard`** is a special singleton folder that hosts the clipboard history panel instead of a window card grid. Selecting it replaces the window list with a scrollable list of recent clipboard text entries. It does not contain `WindowInfo` items — `FolderService.RefreshFolder` returns early for this type without calling `_windowService.GetAllWindows()`.
+
+    See the [Clipboard History](/features/clipboard-history) page for full details.
+  </Accordion>
+
+  <Accordion title="RecycleBin">
+    **`FolderType.RecycleBin`** is a special singleton folder that opens the Windows shell Recycle Bin when selected and confirmed with `Enter`. Like the Clipboard folder, it contains no `WindowInfo` items and cannot be deleted.
+
+    See the [Window Navigation](/features/window-navigation) page for more context.
+  </Accordion>
+</AccordionGroup>
+
+## How SmartRules Work
+
+A `SmartRules` folder holds a single `FolderRuleGroup` on its `Rules` property. The rule group defines:
+
+- **`Operator`** — `RuleOperator.AND` (all conditions must match) or `RuleOperator.OR` (any condition can match)
+- **`Conditions`** — a list of `FolderRuleCondition` objects, each specifying a `Field`, a `Comparison`, and a `Value`
+
+### Fields
+
+| `RuleField` | What it tests |
+|---|---|
+| `ProcessName` | `WindowInfo.ProcessName` — the executable name |
+| `Title` | `WindowInfo.Title` — the window title bar text |
+| `ClassName` | `WindowInfo.ClassName` — the Win32 window class name |
+
+### Comparisons
+
+| `RuleComparison` | Behavior |
+|---|---|
+| `Equals` | Case-insensitive exact match |
+| `Contains` | Case-insensitive substring match |
+| `StartsWith` | Case-insensitive prefix match |
+| `EndsWith` | Case-insensitive suffix match |
+| `Regex` | Case-insensitive regular expression match via `Regex.IsMatch`; invalid patterns return `false` silently |
+
+### Matching Logic
+
+**`FolderRuleGroup.Matches(window)`**
+
+```csharp
+// AND: all conditions must match
+return Operator == RuleOperator.AND
+    ? Conditions.All(c => c.Matches(window))
+    : Conditions.Any(c => c.Matches(window));
+```
+
+An empty `Conditions` list always returns `false` — an empty rule group never matches any window.
+
+**`FolderRuleCondition.Matches(window)`** selects the field value from the `WindowInfo`, then applies the chosen comparison. All string comparisons use `StringComparison.OrdinalIgnoreCase`. For `Regex`, any exception thrown by `Regex.IsMatch` is caught and returns `false` — so a malformed pattern degrades gracefully rather than crashing.
+
+### Example Rule Group
+
+The following conceptual structure represents a SmartRules folder that matches any VS Code window **or** any window whose title contains a `.tsx` file extension — useful for grouping front-end development work:
+
+```json
+{
+  "operator": "OR",
+  "conditions": [
+    { "field": "ProcessName", "comparison": "Equals", "value": "Code" },
+    { "field": "Title", "comparison": "Contains", "value": ".tsx" }
+  ]
+}
+```
+
+An AND example — match only Chrome windows whose title contains "GitHub":
+
+```json
+{
+  "operator": "AND",
+  "conditions": [
+    { "field": "ProcessName", "comparison": "Equals", "value": "chrome" },
+    { "field": "Title", "comparison": "Contains", "value": "GitHub" }
+  ]
+}
+```
+
+## Creating Folders
+
+To create a new folder, open the BetterWinTab overlay and click the **+** button in the sidebar, or press the corresponding keyboard shortcut in the Settings panel. The Add Folder panel lets you:
+
+1. Set a **name** and choose an **icon** glyph and an optional **background color** for the sidebar entry.
+2. Toggle **Smart Folder (process)** ON and pick a running process from the dropdown to create a `SmartProcess` folder.
+3. Toggle **Advanced Rules** ON to build a `SmartRules` folder with `FolderRuleCondition` entries and an AND/OR operator.
+4. Leave both toggles OFF to create a `Manual` folder.
+
+To edit an existing folder, right-click its name in the sidebar and choose **Edit**.
+
+<Note>
+The legacy `ProcessFilter` and `ClassNameFilter` string properties on `WindowFolder` are preserved for backward compatibility with settings files created before `SmartRules` (v2) was introduced. When either field is set on a folder whose `Type` is `SmartProcess` or `SmartClass`, the single-field filter is applied exactly as before. New folders created from the UI always use the current type-based system.
+</Note>

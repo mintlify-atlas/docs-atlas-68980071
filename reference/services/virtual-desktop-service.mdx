@@ -1,0 +1,151 @@
+---
+title: "VirtualDesktopService API Reference"
+sidebarTitle: "VirtualDesktopService"
+description: "VirtualDesktopService wraps the Windows IVirtualDesktopManager COM interface to enrich windows with desktop metadata and move windows between virtual desktops."
+---
+
+`VirtualDesktopService` wraps the Windows `IVirtualDesktopManager` COM interface (`CLSID_VirtualDesktopManager`) to add virtual desktop awareness to BetterWinTab's window list. It enriches each `WindowInfo` object with the desktop GUID, 1-based desktop number, localized desktop name, and a flag indicating whether the window is on the currently active desktop. The service degrades gracefully — if COM activation fails, all operations become safe no-ops.
+
+<Note>
+  `IsAvailable` is `false` when the `IVirtualDesktopManager` COM interface cannot be activated. This can occur on Windows builds that predate virtual desktop support or in restricted/sandboxed environments. All methods check `IsAvailable` before making any COM calls.
+</Note>
+
+---
+
+## Constructor
+
+### `VirtualDesktopService()`
+
+```csharp
+public VirtualDesktopService()
+```
+
+Attempts to instantiate the `VirtualDesktopManagerClass` COM object. If COM activation throws for any reason (e.g. the class is not registered, the process is restricted), the internal `_manager` field is set to `null` and `IsAvailable` returns `false`. No exception is propagated to the caller.
+
+---
+
+## Properties
+
+### `IsAvailable`
+
+```csharp
+public bool IsAvailable { get; }
+```
+
+`true` if the `IVirtualDesktopManager` COM interface was activated successfully in the constructor. When `false`, `EnrichWindows` is a no-op and `SwitchToWindowDesktop` always returns `false`.
+
+---
+
+### `HasMultipleDesktops`
+
+```csharp
+public bool HasMultipleDesktops { get; }
+```
+
+`true` when the ordered desktop list built during the most recent `EnrichWindows` call contains more than one entry. Useful for the UI to conditionally show or hide desktop number badges on window cards — there is no visual benefit to displaying "Desktop 1" when only one desktop exists.
+
+---
+
+## Methods
+
+### `SetOwnerHwnd(IntPtr)`
+
+Registers the overlay window handle so that `EnrichWindows` can determine the **current virtual desktop** reliably before iterating user windows.
+
+```csharp
+public void SetOwnerHwnd(IntPtr hwnd)
+```
+
+<ParamField path="hwnd" type="IntPtr" required>
+  The `HWND` of the BetterWinTab overlay window. Pass this immediately after the overlay window is created and before the first call to `EnrichWindows`.
+</ParamField>
+
+The owner HWND approach is more reliable than inferring the current desktop from user windows because `IVirtualDesktopManager.GetWindowDesktopId` on the overlay window is guaranteed to return the GUID of the active desktop even if no user windows have been queried yet. This prevents a race condition where `_currentDesktopId` remains `Guid.Empty` for the first enrichment pass.
+
+---
+
+### `EnrichWindows(List<WindowInfo>)`
+
+Adds virtual desktop metadata to every `WindowInfo` in the list by calling `IVirtualDesktopManager.GetWindowDesktopId` and `IsWindowOnCurrentVirtualDesktop` for each window handle. A no-op when `IsAvailable` is `false`.
+
+```csharp
+public void EnrichWindows(List<WindowInfo> windows)
+```
+
+<ParamField path="windows" type="List<WindowInfo>" required>
+  The list of windows to enrich in-place. Each `WindowInfo` object is mutated directly — `DesktopId`, `DesktopNumber`, `DesktopName`, and `IsOnCurrentDesktop` are all set by this method.
+</ParamField>
+
+After this method returns, each `WindowInfo` carries:
+
+| Property | Description |
+|----------|-------------|
+| `DesktopId` | The raw `Guid` returned by `IVirtualDesktopManager.GetWindowDesktopId`. `Guid.Empty` on COM failure. |
+| `DesktopNumber` | 1-based position in the ordered desktop list (e.g. `1` = Desktop 1). `0` when the GUID was not found in the known list. |
+| `DesktopName` | Human-readable name from registry, or a localized fallback such as `"Desktop 2"` / `"Escritorio 2"`. |
+| `IsOnCurrentDesktop` | `true` when the window belongs to the currently active virtual desktop. Defaults to `true` on COM failure (safe assumption). |
+
+**Desktop ordering** — the ordered desktop list is rebuilt on every call using the following priority:
+
+1. **`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops\VirtualDesktopIDs`** binary blob — each desktop GUID is stored as 16 bytes in Windows mixed-endian format. This matches the exact order shown in Task View.
+2. **Fallback** — GUIDs inferred from enumerated windows; current desktop placed first, remaining GUIDs sorted.
+
+Any GUIDs found in windows that are absent from the registry blob are appended to the end of the list as a safety net.
+
+**Desktop name resolution:**
+
+1. `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops\Desktops\{GUID}\Name` registry value.
+2. Localized positional label: `"{Word} {Number}"` — see supported locales below.
+
+<Note>
+  `IsWindowOnCurrentVirtualDesktop` can return `E_FAIL` for windows on non-current desktops in some Windows builds. When this occurs, `VirtualDesktopService` falls back to comparing the window's `DesktopId` GUID against `_currentDesktopId` directly.
+</Note>
+
+**Supported locales for default desktop name:**
+
+| Language | Default name pattern |
+|----------|---------------------|
+| English (default) | Desktop N |
+| Spanish (`es`) | Escritorio N |
+| French (`fr`) | Bureau N |
+| German (`de`) | Schreibtisch N |
+| Italian (`it`) | Scrivania N |
+| Portuguese (`pt`) | Área de Trabalho N |
+| Japanese (`ja`) | デスクトップ N |
+| Chinese (`zh`) | 桌面 N |
+| Korean (`ko`) | 바탕 화면 N |
+| Dutch (`nl`) | Bureaublad N |
+| Russian (`ru`) | Рабочий стол N |
+| Polish (`pl`) | Pulpit N |
+| Turkish (`tr`) | Masaüstü N |
+| Arabic (`ar`) | سطح المكتب N |
+| Swedish (`sv`) | Skrivbord N |
+| Norwegian (`nb`/`no`) | Skrivebord N |
+| Danish (`da`) | Skrivebord N |
+| Finnish (`fi`) | Työpöytä N |
+| Czech (`cs`) | Plocha N |
+| Hungarian (`hu`) | Asztal N |
+
+---
+
+### `SwitchToWindowDesktop(IntPtr)`
+
+Brings a window to the current virtual desktop by calling `IVirtualDesktopManager.MoveWindowToDesktop`, then activates it.
+
+```csharp
+public bool SwitchToWindowDesktop(IntPtr hWnd)
+```
+
+<ParamField path="hWnd" type="IntPtr" required>
+  The `HWND` of the window to move to the current virtual desktop.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  `true` if the window was already on the current desktop or was moved successfully. `false` if `IsAvailable` is `false`, `_currentDesktopId` is unknown (`Guid.Empty`), or the COM call failed.
+</ResponseField>
+
+<Warning>
+  `IVirtualDesktopManager.MoveWindowToDesktop` **moves the window to the current desktop** — it does not switch the active desktop to the window's desktop. This is a known limitation of the public Windows COM API. There is no documented, stable public API to programmatically switch the active virtual desktop; undocumented interfaces exist but are fragile across Windows updates. BetterWinTab therefore brings the window to the user rather than the user to the window.
+</Warning>
+
+If `IsWindowOnCurrentVirtualDesktop` reports the window is already on the current desktop, the move is skipped and `true` is returned immediately. COM exceptions (e.g. invalid `HWND`) are caught silently and `false` is returned.

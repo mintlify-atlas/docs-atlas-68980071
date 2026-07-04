@@ -1,0 +1,107 @@
+---
+title: "Configure the BetterWinTab Activation Hotkey"
+sidebarTitle: "Hotkeys"
+description: "Change the global keyboard shortcut that opens and closes the BetterWinTab overlay. Supports Ctrl, Alt, Shift, and Win modifier combinations."
+---
+
+BetterWinTab listens for a global keyboard shortcut to show or hide its overlay from anywhere on your desktop. The default combination is **Ctrl + Tab**. You can replace it with any supported modifier and key combination through the Settings panel, and the change takes effect immediately without restarting the app.
+
+## Default Hotkey
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `HotkeyModifiers` | `0x0002` | `MOD_CONTROL` (Ctrl key) |
+| `HotkeyVKey` | `0x09` | `VK_TAB` (Tab key) |
+| Formatted display | `Ctrl + Tab` | Result of `KeyboardHelper.FormatHotkey()` |
+
+The display text shown in Settings is produced by `KeyboardHelper.FormatHotkey(modifiers, vKey)`, which builds the string by reading the modifier bitmask in order — Ctrl, Alt, Shift, Win — and then appending the human-readable key name (e.g. `Tab`, `Space`, `F5`, or `A`).
+
+## Supported Modifier Keys
+
+Modifiers are stored as a bitmask. You can combine them freely by OR-ing the values together.
+
+| Modifier | Bitmask value | Key |
+|---|---|---|
+| `MOD_ALT` | `0x0001` | Alt |
+| `MOD_CONTROL` | `0x0002` | Ctrl |
+| `MOD_SHIFT` | `0x0004` | Shift |
+| `MOD_WIN` | `0x0008` | Win (⊞) |
+
+**Example combinations:**
+
+| Combination | Modifiers bitmask |
+|---|---|
+| Ctrl + Tab | `0x0002` |
+| Ctrl + Shift + Tab | `0x0006` |
+| Alt + Tab | `0x0001` |
+| Ctrl + Alt + Space | `0x0003` |
+
+## How to Change Your Hotkey
+
+<Steps>
+  <Step title="Open Settings">
+    Press **Ctrl + Tab** to open the overlay (or your current hotkey), then click the **Settings** gear icon to open the Settings panel.
+  </Step>
+  <Step title="Go to General">
+    Select the **General** tab at the top of the Settings panel.
+  </Step>
+  <Step title="Click Record">
+    In the **Hotkey** field, click the **Record** button. The field will display:
+    ```
+    ▶  Press your key combo now...
+    ```
+  </Step>
+  <Step title="Press your desired combination">
+    Hold down your modifier keys (e.g. Ctrl, Alt, Shift) and press the main key. BetterWinTab captures the combination as soon as a non-modifier key is pressed.
+  </Step>
+  <Step title="Confirm or cancel">
+    The Hotkey field immediately updates to show the formatted combination (e.g. `Ctrl + Shift + F5`). If you change your mind, click **Cancel** to revert. Otherwise, click **Save** to persist the change.
+  </Step>
+</Steps>
+
+The new hotkey is stored in `settings.json` under the `hotkeyModifiers` and `hotkeyVKey` fields and is re-applied the next time the app starts.
+
+## How the Hook Works
+
+BetterWinTab uses a **low-level keyboard hook** (`WH_KEYBOARD_LL`) rather than the Windows `RegisterHotKey` API. This is intentional: Windows frequently reserves Ctrl + Tab for its own shell use, making `RegisterHotKey` unreliable for that combination. The low-level hook intercepts keystrokes before they reach any other application.
+
+When the configured key combination fires, the hook:
+
+1. Checks that all required modifier keys are currently held down using `GetAsyncKeyState`.
+2. Applies a **300 ms debounce** — if less than 300 ms have passed since the last toggle, the event is suppressed to prevent rapid-fire toggling.
+3. Dispatches `HotkeyPressed` on the UI thread via `DispatcherQueue.TryEnqueue`.
+4. **Consumes the keystroke** by returning `1` from the hook callback, so the key combination does not reach any other application.
+
+### Alt + Tab and Win + Tab Pass-Through
+
+While the BetterWinTab overlay is open, the hook also watches for **Alt + Tab** and **Win + Tab**. If detected with the overlay visible, it fires `HideOverlayRequested` to close the BetterWinTab overlay — but it does **not** consume the keystroke. Windows receives it normally and opens its own Task View or switcher as expected.
+
+## Persistence
+
+The hotkey is saved to `%APPDATA%\BetterWinTab\settings.json`:
+
+```json
+{
+  "hotkeyModifiers": 2,
+  "hotkeyVKey": 9
+}
+```
+
+`HotkeyService.Configure(modifiers, vKey)` is called immediately when you save, so the new shortcut is active without restarting.
+
+## Avoiding Conflicting Combinations
+
+<Warning>
+  **Win + Tab** is reserved by Windows for Task View. If you assign Win + Tab as the BetterWinTab hotkey, it will be captured by the low-level hook and consumed, which means Task View will stop working. Choose a different combination.
+
+  Similarly, avoid **Alt + Tab** — while BetterWinTab would capture the keystroke, the hook explicitly treats Alt + Tab as a "hide overlay and pass through" signal, so it cannot reliably serve as the activation hotkey.
+
+  Other combinations to approach with caution:
+
+  - **Win + D** — Show Desktop
+  - **Win + E** — File Explorer
+  - **Win + R** — Run dialog
+  - **Ctrl + Alt + Del** — cannot be intercepted by any application hook
+
+  Prefer Ctrl-based or Ctrl + Shift-based shortcuts for the most reliable experience.
+</Warning>

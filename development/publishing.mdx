@@ -1,0 +1,184 @@
+---
+title: "Publish and Release BetterWinTab"
+sidebarTitle: "Publishing"
+description: "Build a self-contained release, create the Inno Setup installer, package a portable zip, and trigger an automated GitHub release via git tag."
+---
+
+BetterWinTab ships as two release artifacts: a Windows installer built with Inno Setup and a portable zip containing the same self-contained binaries. Both are produced from a single `dotnet publish` output directory. You can build and release entirely manually, or let the GitHub Actions workflow handle everything automatically when you push a version tag.
+
+## Publish a Self-Contained Release Build
+
+The publish step compiles BetterWinTab in Release configuration, bundles the .NET runtime and Windows App SDK, and writes everything to an output folder that can be run on any supported Windows machine without additional installs.
+
+```powershell
+dotnet publish BetterWinTab.csproj -p:Platform=x64 -c Release
+```
+
+The published files land at:
+
+```
+bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
+```
+
+The publish profiles (`SelfContained=true`, `WindowsAppSDKSelfContained=true`) ensure the output is fully standalone. In Release configuration, `PublishReadyToRun=True` and `PublishTrimmed=True` are applied automatically by the profile.
+
+## Available Publish Profiles
+
+Three publish profiles are provided under `Properties/PublishProfiles/`. Each produces a self-contained output for its target architecture:
+
+| Profile file | Platform flag | Runtime identifier | Output path |
+|---|---|---|---|
+| `win-x64.pubxml` | `x64` | `win-x64` | `bin\Release\...\win-x64\publish\` |
+| `win-x86.pubxml` | `x86` | `win-x86` | `bin\Release\...\win-x86\publish\` |
+| `win-arm64.pubxml` | `ARM64` | `win-arm64` | `bin\Release\...\win-arm64\publish\` |
+
+To publish for a specific profile, pass its filename:
+
+```powershell
+# x86
+dotnet publish BetterWinTab.csproj -p:Platform=x86 -c Release -p:PublishProfile=win-x86.pubxml
+
+# ARM64
+dotnet publish BetterWinTab.csproj -p:Platform=ARM64 -c Release -p:PublishProfile=win-arm64.pubxml
+```
+
+## Build the Installer (Inno Setup)
+
+The Inno Setup script (`installer.iss`) packages the x64 publish output into a per-user Windows installer with optional startup and desktop icon entries.
+
+<Note>
+  The installer script requires the **WebView2 Evergreen Bootstrapper** (`MicrosoftEdgeWebview2Setup.exe`, ~1.6 MB) to be present at `redist\MicrosoftEdgeWebview2Setup.exe` before you run Inno Setup. Download it from the [Microsoft Edge WebView2 page](https://developer.microsoft.com/microsoft-edge/webview2/) and place it in the `redist\` folder at the root of the repository. The GitHub Actions workflow downloads this automatically; for local builds you must do it manually once.
+</Note>
+
+<Steps>
+  <Step title="Publish the x64 release build">
+    ```powershell
+    dotnet publish BetterWinTab.csproj -p:Platform=x64 -c Release
+    ```
+  </Step>
+
+  <Step title="Place the WebView2 bootstrapper">
+    Download `MicrosoftEdgeWebview2Setup.exe` from [https://developer.microsoft.com/microsoft-edge/webview2/](https://developer.microsoft.com/microsoft-edge/webview2/) and copy it to:
+
+    ```
+    redist\MicrosoftEdgeWebview2Setup.exe
+    ```
+  </Step>
+
+  <Step title="Compile the installer with Inno Setup">
+    ```powershell
+    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+    ```
+
+    To embed a specific version number in the installer filename and About screen, pass the version as a define:
+
+    ```powershell
+    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=1.2.0 installer.iss
+    ```
+  </Step>
+
+  <Step title="Locate the installer output">
+    The compiled installer is written to:
+
+    ```
+    installer-output\BetterWinTab-Setup-1.0.0-x64.exe
+    ```
+
+    (Substitute the version number you passed, or `1.0.0` if you did not pass `/DAppVersion`.)
+  </Step>
+</Steps>
+
+## Build a Portable Zip
+
+The portable distribution is simply the publish output folder compressed into a zip archive. No additional tools are required beyond the standard `Compress-Archive` cmdlet.
+
+```powershell
+Compress-Archive -Path "bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\*" `
+                 -DestinationPath "installer-output\BetterWinTab-1.0.0-win-x64-portable.zip"
+```
+
+Users can extract this zip anywhere and run `BetterWinTab.exe` directly — no installation step required.
+
+## Installer Features
+
+The Inno Setup script (`installer.iss`) produces an installer with these characteristics:
+
+| Feature | Detail |
+|---|---|
+| **Install scope** | Per-user (`PrivilegesRequired=lowest`) — no UAC prompt required |
+| **Startup entry** | Optional; presented as a checked-by-default task during setup; written to `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` |
+| **Desktop icon** | Optional; presented as an unchecked task during setup |
+| **WebView2 Runtime** | Automatically installed silently from the bundled bootstrapper if not already present on the machine |
+| **Uninstall** | Removes all files from the install directory and deletes `%APPDATA%\BetterWinTab` (user settings and state) |
+
+## Automated GitHub Actions Release
+
+The repository includes a GitHub Actions workflow (`.github/workflows/release-on-tag.yml`) that runs the entire release pipeline automatically when you push a version tag.
+
+### Trigger
+
+Push any tag matching `v*` from the `main` branch:
+
+```powershell
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+<Steps>
+  <Step title="Validate the tag is on main">
+    The workflow checks that the tagged commit is reachable from `origin/main`. If not, the release is skipped and no artifacts are produced.
+  </Step>
+
+  <Step title="Extract the version number">
+    The tag name (e.g. `v1.2.0`) is stripped of its `v` prefix to produce the bare version string (`1.2.0`) used for installer filenames and the GitHub release title.
+  </Step>
+
+  <Step title="Set up .NET 8">
+    The workflow uses `actions/setup-dotnet@v4` with `global-json-file: global.json`, ensuring the exact SDK version pinned in the repository is used.
+  </Step>
+
+  <Step title="Install Inno Setup">
+    Inno Setup 6 is installed on the `windows-latest` runner via Chocolatey (`choco install innosetup`).
+  </Step>
+
+  <Step title="Download the WebView2 bootstrapper">
+    `MicrosoftEdgeWebview2Setup.exe` is downloaded from the official Microsoft URL and placed at `redist/MicrosoftEdgeWebview2Setup.exe`.
+  </Step>
+
+  <Step title="Restore and publish x64">
+    ```powershell
+    dotnet publish BetterWinTab.csproj `
+      -c Release `
+      -p:Platform=x64 `
+      -p:Version=<version> `
+      -p:PublishProfile=win-x64.pubxml
+    ```
+  </Step>
+
+  <Step title="Build the installer">
+    ISCC is invoked with `/DAppVersion=<version>` so the installer filename and metadata match the tag:
+
+    ```powershell
+    & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=1.2.0" installer.iss
+    ```
+
+    Output: `installer-output\BetterWinTab-Setup-1.2.0-x64.exe`
+  </Step>
+
+  <Step title="Build the portable zip">
+    The publish output folder is compressed using `Compress-Archive`:
+
+    ```powershell
+    Compress-Archive -Path "bin/Release/.../win-x64/publish/*" `
+                     -DestinationPath "installer-output/BetterWinTab-1.2.0-win-x64-portable.zip"
+    ```
+  </Step>
+
+  <Step title="Create or update the GitHub release">
+    Both artifacts are uploaded to a GitHub release named **BetterWinTab v1.2.0**. If a release for that tag already exists, the artifacts are re-uploaded with `--clobber`; otherwise a new release is created.
+  </Step>
+</Steps>
+
+### Skipping Non-Main Tags
+
+If the tagged commit is not reachable from `origin/main`, the workflow logs a message and exits cleanly without building or publishing anything. This prevents accidental releases from feature branches or detached HEAD states.

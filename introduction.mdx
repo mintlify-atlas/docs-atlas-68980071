@@ -1,0 +1,68 @@
+---
+title: "BetterWinTab: The Missing Window Manager for Windows"
+sidebarTitle: "Introduction"
+description: "BetterWinTab is a native WinUI 3 keyboard-first overlay that replaces Alt+Tab with hierarchical, searchable, folder-organized window navigation."
+---
+
+BetterWinTab (BWT) is a free, open-source, native Windows window manager built for power users who keep dozens of apps, browser profiles, terminals, editors, and work contexts open at the same time. This page explains what BetterWinTab is, the problems it solves, and what makes it different from every other window-switching solution on Windows.
+
+## The Problem with Alt+Tab
+
+Modern desktops are not small. Developers, designers, students, and power users routinely run multiple VS Code windows, browser profiles, terminals, file explorers, notes apps, dashboards, and communication tools side-by-side. Windows still handles all of them as one flat, recency-ordered list.
+
+| Problem | What Happens |
+|---|---|
+| **No context** | `code.exe`, `chrome.exe`, terminals, and explorers sit side by side with no meaning |
+| **Volatile order** | Every click reshuffles the switcher, breaking spatial memory |
+| **Slow discovery** | Finding one window among dozens becomes scanning, guessing, and repeating |
+
+BetterWinTab solves all three by making window navigation **context-aware, searchable, and keyboard-driven**.
+
+## What Is BetterWinTab?
+
+Press `Ctrl + Tab` and a compact overlay appears over your desktop. Every open window is available, grouped into folders by context, and filterable by typing any part of a title, app name, or process name. Select what you need and the overlay disappears instantly — no mouse required.
+
+<Note>
+  BetterWinTab is the tool that should have shipped with your OS. It is **free**, **MIT licensed**, and built entirely with native Windows technologies — no Electron, no browser runtime, no background cloud service.
+</Note>
+
+## Why Native WinUI 3?
+
+Most third-party productivity overlays on Windows are built on Electron or similar web-embedded runtimes. BetterWinTab is different: it is written in **C#** and **.NET 8**, uses **WinUI 3** for the interface, and calls Win32 APIs directly for window enumeration, global hotkeys, live DWM thumbnails, and native shell integration. The result is a UI that feels like part of Windows — fast to open, light on memory, and visually consistent with the system.
+
+## Supported Windows Versions
+
+BetterWinTab runs on **Windows 10 build 19041** (May 2020 Update) and later, as well as all editions of **Windows 11**. No unsupported preview builds or insider tracks are required.
+
+## Core Capabilities
+
+| Feature | Summary |
+|---|---|
+| **Smart Folders** | Automatically group windows by process name, window class, or custom rules — new windows appear in the right folder the moment they open |
+| **Fuzzy Search** | Typo-tolerant, real-time search across all open window titles, app names, and process names |
+| **App Launcher** | When no open window matches your search, BetterWinTab becomes a launcher for installed programs |
+| **Clipboard History** | A focused, keyboard-driven panel for recent text items — faster than `Win + V` |
+| **Themes & Customization** | Built-in presets plus full semantic color-token customization (accent, background, surface, card, border, text, danger) |
+| **Virtual Desktop Awareness** | Windows are tracked and displayed with context, not just as a flat global list |
+
+<Tip>
+  The activation hotkey defaults to `Ctrl + Tab`, but you can change it to any combination you prefer in **Settings → General → Hotkey**.
+</Tip>
+
+## Key Differentiators at a Glance
+
+- **Keyboard-first by design** — every action from opening the overlay to closing a window has a dedicated key binding
+- **Native WinUI 3** — not Electron; renders with the same stack as Windows 11's own UI shell
+- **Hierarchical folders** — both automatic Smart Folders (rule-based) and manual folders you control
+- **MIT open source** — read the source, fork it, contribute, or self-host your own builds
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download the installer or portable zip and get BetterWinTab running on your machine in under two minutes.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Open the overlay, navigate your first window, create a Smart Folder, and customize your hotkey — all in five minutes.
+  </Card>
+</CardGroup>

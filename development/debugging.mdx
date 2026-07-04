@@ -1,0 +1,116 @@
+---
+title: "Debug BetterWinTab with VS Code"
+sidebarTitle: "Debugging"
+description: "Run BetterWinTab in debug mode using VS Code tasks, the .NET CLI, or the coreclr launch configuration with full breakpoint support."
+---
+
+BetterWinTab ships with a complete `.vscode` configuration that covers building, running, attaching, and hot-reloading the application. You can debug it through the VS Code task system, by launching it manually from PowerShell, or by pressing F5 to use the full coreclr debugger with breakpoints and the Debug Console.
+
+## Recommended: Run via VS Code Task
+
+The fastest way to build and launch BetterWinTab for debugging is through the predefined `run-x64` task, which builds and starts the app in one step.
+
+<Steps>
+  <Step title="Open the Command Palette">
+    Press **Ctrl+Shift+P** and type **Tasks: Run Task**, then press Enter.
+  </Step>
+
+  <Step title="Select run-x64">
+    Choose **run-x64** from the task list. This task depends on `build-x64`, so it will automatically kill any running BetterWinTab process, rebuild the project for x64, and then launch the compiled executable.
+  </Step>
+
+  <Step title="Activate the overlay">
+    Once the app is running, press **Ctrl+Tab** to show the BetterWinTab overlay and confirm that the application is working correctly.
+  </Step>
+</Steps>
+
+## Manual Run from PowerShell
+
+If you prefer working directly in a terminal, use this sequence to stop any existing instance, rebuild, and relaunch:
+
+```powershell
+Stop-Process -Name BetterWinTab -Force -ErrorAction SilentlyContinue
+dotnet build BetterWinTab.csproj -p:Platform=x64
+Start-Process "bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\BetterWinTab.exe"
+```
+
+The `Stop-Process` call is a safety step — it ensures you are never running two instances simultaneously and that file locks are released before the next build writes new binaries.
+
+## Hot Reload
+
+<Tip>
+  `dotnet watch` rebuilds and restarts the app automatically whenever you save a source file, without you having to manually re-run any command.
+</Tip>
+
+```powershell
+dotnet watch run --project BetterWinTab.csproj -p:Platform=x64 --runtime win-x64
+```
+
+Hot reload is best suited for iterating on UI layouts, logic, and settings behavior. Note that some WinUI 3 XAML changes may require a full restart to take effect.
+
+## F5 Debugging with Breakpoints
+
+For full debugger support — breakpoints, variable inspection, call stacks, and the Debug Console — use the VS Code launch configuration.
+
+<Steps>
+  <Step title="Open the Run and Debug panel">
+    Press **Ctrl+Shift+D** or click the Run and Debug icon in the Activity Bar.
+  </Step>
+
+  <Step title="Select the launch configuration">
+    In the configuration dropdown at the top of the panel, select **BetterWinTab (x64 Debug)**.
+  </Step>
+
+  <Step title="Start debugging">
+    Press **F5**. VS Code will run the `build-x64` pre-launch task (which kills any running instance and rebuilds the project), then attach the coreclr debugger to the launched process.
+  </Step>
+
+  <Step title="Set breakpoints and interact">
+    Click in the gutter next to any line in a `.cs` source file to set a breakpoint. Press **Ctrl+Tab** in the app to trigger the overlay and exercise any codepath you want to inspect.
+  </Step>
+</Steps>
+
+### Launch Configuration (`.vscode/launch.json`)
+
+The repository includes two configurations in `.vscode/launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "BetterWinTab (x64 Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-x64",
+            "program": "${workspaceFolder}/bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/BetterWinTab.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Attach to BetterWinTab",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}
+```
+
+| Field | Value | Notes |
+|---|---|---|
+| `type` | `coreclr` | Uses the .NET coreclr debugger provided by the C# extension |
+| `preLaunchTask` | `build-x64` | Automatically kills and rebuilds before each debug session |
+| `program` | `.../win-x64/BetterWinTab.exe` | Points to the x64 debug output |
+| `console` | `internalConsole` | Routes `Debug.WriteLine` output to the VS Code Debug Console |
+| `stopAtEntry` | `false` | The process runs normally; debugger attaches after startup |
+
+The second configuration, **Attach to BetterWinTab**, lets you attach the debugger to a process that is already running — useful when you need to diagnose an issue that only appears after a specific user action performed before you can set breakpoints.
+
+## Debugging Tips
+
+- **Breakpoints in C# files** — Click in the editor gutter beside any line in `.cs` files. Breakpoints work in all source files including XAML code-behind, view models, and Win32 interop helpers.
+- **Debug Console output** — `System.Diagnostics.Debug.WriteLine(...)` calls in the source are visible in the VS Code **Debug Console** panel when running under the `internalConsole` configuration.
+- **Inspecting the overlay** — The BetterWinTab overlay is a WinUI 3 window that is shown and hidden based on the global hotkey. To trigger it during a debug session, make sure focus is not on VS Code when you press Ctrl+Tab, or reassign the activation hotkey from **Settings → General** to avoid conflicts.
+- **Native interop crashes** — If the process exits unexpectedly at startup without hitting any managed breakpoint, confirm that you built with `-p:Platform=x64`. A platform-neutral build will be missing the native WinUI host binaries and will crash before reaching managed code.

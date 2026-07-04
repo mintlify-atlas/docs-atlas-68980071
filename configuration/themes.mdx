@@ -1,0 +1,187 @@
+---
+title: "Themes and Color Customization in BetterWinTab"
+sidebarTitle: "Themes"
+description: "Customize every UI color in BetterWinTab using semantic color tokens, choose from built-in theme presets, or save your own named presets."
+---
+
+BetterWinTab exposes a complete set of semantic color tokens that control every visible color in the overlay — from the main background and card surfaces to the accent glow, text hierarchy, border lines, and interactive hover states. You can pick from over twenty built-in presets, tweak individual tokens per-tab in the Settings panel, or save your own named preset to reuse later.
+
+## Color Tokens
+
+All 15 tokens live in the `AppearanceSettings` model and are written to `settings.json` as hex strings.
+
+<Note>
+  Colors are stored as hex strings in the format `"#RRGGBB"` (fully opaque) or `"#AARRGGBB"` (with alpha channel). The alpha byte comes **first** in the 8-character form — for example `"#1A39FF14"` has alpha `0x1A`, red `0x39`, green `0xFF`, blue `0x14`. This is the Windows `ARGB` convention used by WinUI 3's `Windows.UI.Color`.
+</Note>
+
+### Full Token Reference
+
+| Token | Default | Description |
+|---|---|---|
+| `AccentColor` | `#39FF14` | Primary accent — active states, selected indicators, focus rings |
+| `AccentDimColor` | `#1A8A0A` | Secondary / dimmed accent — pressed states, secondary highlights |
+| `AccentSubtleColor` | `#0D3D06` | Subtle accent — very faint tinted backgrounds behind accent elements |
+| `BackgroundColor` | `#000000` | Main overlay background — fills the outermost container |
+| `SurfaceColor` | `#0A0A0A` | Elevated surface — panels, sidebars, and sections that sit above the background |
+| `CardColor` | `#111111` | Window card backgrounds — the individual cards that represent open windows |
+| `BorderColor` | `#1A1A1A` | Dividers and borders — separators between sections and card outlines |
+| `TextPrimaryColor` | `#FFFFFF` | Primary text — window titles, folder names, main labels |
+| `TextSecondaryColor` | `#AAAAAA` | Secondary text — subtitles, process names, supplemental info |
+| `TextMutedColor` | `#666666` | Muted / placeholder text — hints, counts, disabled labels |
+| `DangerColor` | `#FF3344` | Destructive actions — close-window confirmation, delete states |
+| `FolderHoverColor` | `#1A39FF14` | Folder item hover overlay — semi-transparent tint when hovering a folder |
+| `FolderSelectedColor` | `#2939FF14` | Folder item selected overlay — tint on the currently selected folder |
+| `WindowHoverBorderColor` | `#6639FF14` | Window card hover border — accent-tinted border that appears on card hover |
+| `WindowHoverBackgroundColor` | `#0C39FF14` | Window card hover background — very faint accent fill on card hover |
+
+### How Tokens Are Applied at Runtime
+
+`ThemeApplier.Apply(AppearanceSettings)` is called every time the user saves settings or applies a preset. It writes all values into the WinUI 3 application resource dictionary so changes are reflected immediately without reloading any page.
+
+For each token, `Apply` sets **two** resource dictionary entries:
+
+- A `SolidColorBrush` resource (e.g. `NeonGreenBrush`) used directly by XAML `{StaticResource}` bindings on brush properties.
+- A `Color` resource (e.g. `NeonGreen`) used by XAML bindings on color properties and as a base for derived styles.
+
+```csharp
+// Excerpt from ThemeApplier.Apply()
+SetBrush("NeonGreenBrush",   a.AccentColor);
+SetColor("NeonGreen",        a.AccentColor);
+
+SetBrush("CardSurfaceBrush", a.CardColor);
+SetColor("CardSurface",      a.CardColor);
+// ... (all 15 tokens follow the same pattern)
+```
+
+The mutating approach — writing directly into existing `SolidColorBrush.Color` rather than replacing the brush object — means bound controls update live via the existing data-binding chain without requiring a full resource reload.
+
+### Accent-Derived Hover Colors
+
+The four hover/selection tokens (`FolderHoverColor`, `FolderSelectedColor`, `WindowHoverBorderColor`, `WindowHoverBackgroundColor`) contain an alpha byte combined with the accent color's RGB. When you change `AccentColor`, BetterWinTab automatically re-derives these four colors so hover states always match your accent.
+
+<Tip>
+  When `ThemeApplier` detects that a hover token's RGB component is still the default neon-green (`39FF14`) but the accent has been changed to something else, it automatically replaces the RGB component with the new accent's RGB while preserving the original alpha. This means you usually only need to change `AccentColor` and the four hover tokens will update themselves — you don't have to touch them manually.
+
+  The alpha values used for each hover token are:
+
+  | Token | Alpha byte |
+  |---|---|
+  | `FolderHoverColor` | `0x1A` (≈10%) |
+  | `FolderSelectedColor` | `0x29` (≈16%) |
+  | `WindowHoverBorderColor` | `0x66` (≈40%) |
+  | `WindowHoverBackgroundColor` | `0x0C` (≈5%) |
+</Tip>
+
+---
+
+## Built-In Theme Presets
+
+BetterWinTab ships with the following built-in presets. They appear in **Settings → Themes** and can be applied with one click.
+
+| Preset name | Accent color | Style |
+|---|---|---|
+| Neon Green | `#39FF14` | Default — pure black background, neon green accent |
+| Cyber Blue | `#00D4FF` | Dark navy background, electric cyan accent |
+| Deep Purple | `#BB86FC` | Near-black background, soft violet accent |
+| Crimson | `#FF4444` | Very dark red background, bright red accent |
+| Amber Gold | `#FFB300` | Dark amber background, warm gold accent |
+| Arctic | `#64D8CB` | Dark blue-black background, teal-mint accent |
+| Monochrome | `#DDDDDD` | Pure black background, light grey accent |
+| Dark Cian | `#00ADB5` | Slate-grey background, teal accent |
+| Ice Blue | `#71C9CE` | Light pastel background, soft teal accent (light theme) |
+| Corporate | `#3F72AF` | Off-white background, corporate blue accent (light theme) |
+| Earthy | `#E3CAA5` | Warm dark-brown background, sandy accent |
+| Lavender | `#424874` | Pale lilac background, deep violet accent (light theme) |
+| Sunset | `#F9ED69` | Deep magenta-dark background, yellow accent |
+| Cyberpunk | `#08D9D6` | Charcoal background, teal-green accent |
+| Deep Ocean | `#3282B8` | Dark teal-navy background, steel blue accent |
+| Summer Pop | `#95E1D3` | Warm white background, mint accent (light theme) |
+| Dark Wine | `#E84545` | Dark indigo background, red accent |
+| Industrial | `#F4CE14` | Light grey background, yellow accent (light theme) |
+| Blood Red | `#FF0000` | Pure black background, pure red accent |
+| Fire & Steel | `#FFD460` | Steel-blue background, gold accent |
+| Forest | `#7FBF00` | Near-black green background, lime-green accent |
+| Midnight Rose | `#FF6FA6` | Very dark background, pink accent |
+
+---
+
+## The Settings Panel Tabs
+
+The appearance section of the Settings panel is split into focused tabs so large token lists stay manageable:
+
+| Tab | Tokens covered |
+|---|---|
+| **Themes** | Built-in and custom preset picker |
+| **Accent** | `AccentColor`, `AccentDimColor`, `AccentSubtleColor` |
+| **Bg** | `BackgroundColor`, `SurfaceColor`, `CardColor`, `BorderColor`, `FolderHoverColor`, `FolderSelectedColor`, `WindowHoverBorderColor`, `WindowHoverBackgroundColor` |
+| **Text** | `TextPrimaryColor`, `TextSecondaryColor`, `TextMutedColor` |
+| **Status** | `DangerColor` |
+
+Each tab has a **Reset** button that restores only that tab's tokens to their defaults, leaving every other token unchanged.
+
+---
+
+## Custom Presets
+
+You can save any current color configuration as a named preset and re-apply it later.
+
+### Saving a Custom Preset
+
+1. Configure the colors you want across the Accent, Bg, Text, and Status tabs.
+2. In the **Themes** tab, type a name in the **Preset name** field (e.g. `My Dark Teal`). If you leave it blank, BetterWinTab auto-names it `Custom 1`, `Custom 2`, etc.
+3. Click **Save preset**. The preset is added to the custom preset list and written to `settings.json` immediately under `customPresets`.
+
+### Loading a Custom Preset
+
+Click any preset tile in the **Themes** tab — built-in or custom — to load all its token values into the current editing session. The colors are not committed until you click **Save** in the Settings panel.
+
+### Deleting a Custom Preset
+
+Click the **×** button on a custom preset tile to remove it. The deletion is saved to `settings.json` immediately.
+
+### ThemePreset Model
+
+A preset is a lightweight wrapper:
+
+```csharp
+public class ThemePreset
+{
+    public string Name { get; set; } = "";
+    public AppearanceSettings Appearance { get; set; } = new();
+}
+```
+
+Custom presets are stored in `settings.json` under the `customPresets` array:
+
+```json
+{
+  "customPresets": [
+    {
+      "name": "My Dark Teal",
+      "appearance": {
+        "accentColor": "#00ADB5",
+        "accentDimColor": "#007A80",
+        "accentSubtleColor": "#003840",
+        "backgroundColor": "#0D1117",
+        "surfaceColor": "#161B22",
+        "cardColor": "#1C2128",
+        "borderColor": "#30363D",
+        "textPrimaryColor": "#E6EDF3",
+        "textSecondaryColor": "#8B949E",
+        "textMutedColor": "#484F58",
+        "dangerColor": "#FF5050",
+        "folderHoverColor": "#1A00ADB5",
+        "folderSelectedColor": "#2900ADB5",
+        "windowHoverBorderColor": "#6600ADB5",
+        "windowHoverBackgroundColor": "#0C00ADB5"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Resetting All Colors
+
+To restore every token to factory defaults, open **Settings → Accent** (or any color tab) and click **Reset all to defaults**. This calls `AppearanceSettings.Default()` and repopulates all 15 fields with their original values. The reset is not committed until you click **Save**.

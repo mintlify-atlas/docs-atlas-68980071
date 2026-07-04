@@ -1,0 +1,104 @@
+---
+title: "Launch Installed Apps Directly from the Overlay"
+sidebarTitle: "App Launcher"
+description: "When no open window matches your search, BetterWinTab becomes an app launcher — find any installed program by name and open it with one keystroke."
+---
+
+BetterWinTab doubles as an application launcher without any extra configuration. If you search for something and no open window matches, the launcher suggestions panel appears automatically below the search bar, showing installed apps whose names contain your query. You can open any of them with a single `Enter` keypress — without leaving the keyboard.
+
+## How to Use the Launcher
+
+<Steps>
+  <Step title="Open the overlay">
+    Press `Ctrl+Tab` to show the BetterWinTab overlay.
+  </Step>
+
+  <Step title="Type an app name">
+    Start typing any part of the app's name. If no open windows match, the launcher suggestions panel appears automatically beneath the search bar.
+
+    To jump directly to Apps mode without waiting for the window search to return zero results, press `Tab` while the search bar is active to toggle the mode indicator from **All** to **Apps**.
+  </Step>
+
+  <Step title="Navigate suggestions">
+    Use `Arrow Up` / `Arrow Down` to move between the up-to-8 launch suggestions. Prefix matches appear first, followed by contains matches.
+  </Step>
+
+  <Step title="Launch the app">
+    Press `Enter` to launch the highlighted suggestion. The app opens via the Windows Shell — the same mechanism as double-clicking a shortcut in Explorer.
+  </Step>
+
+  <Step title="Run an arbitrary command (optional)">
+    If no suggestions are returned for your query, BetterWinTab falls back to a **Run dialog** style execution: press `Enter` and the query is passed directly to the Windows Shell (`UseShellExecute = true`). This works for executable names on your `PATH` (e.g., `powershell`), folder paths, `shell:` URIs, and file paths — and does **not** trigger a browser web search.
+  </Step>
+</Steps>
+
+## How Apps Are Discovered
+
+`LaunchService` enumerates `.lnk` shortcut files from both the per-user and all-users Start Menu Programs folders:
+
+```csharp
+// Per-user
+%APPDATA%\Microsoft\Windows\Start Menu\Programs
+
+// All-users
+%ProgramData%\Microsoft\Windows\Start Menu\Programs
+```
+
+Both roots are scanned recursively (`SearchOption.AllDirectories`), so apps installed in subdirectories (e.g. `Microsoft Office`) are picked up without any manual path configuration.
+
+After scanning, the list is:
+
+1. **De-duplicated by name** — the per-user shortcut wins when both locations contain a shortcut with the same name.
+2. **Sorted alphabetically** — results are stored alphabetically so prefix matches are consistent.
+3. **Filtered for noise** — shortcuts containing common noise keywords (`uninstall`, `readme`, `release notes`, `changelog`, `help`, `documentation`, `license`) are silently excluded to keep results clean.
+
+The cache is built lazily on the first search call and held in memory. Call `LaunchService.InvalidateCache()` to force a rebuild if apps are installed or uninstalled while BetterWinTab is running.
+
+## The LaunchItem Model
+
+Each discovered shortcut is represented as a simple record:
+
+```csharp
+public record LaunchItem(string Name, string ShortcutPath);
+```
+
+| Property | Description |
+|---|---|
+| `Name` | Display name derived from the shortcut filename (without extension) |
+| `ShortcutPath` | Absolute path to the `.lnk` file |
+
+## LaunchService API Reference
+
+### `Search(query, maxResults = 8)`
+
+Returns up to `maxResults` items (default 8) whose names match the query string:
+
+```csharp
+IReadOnlyList<LaunchItem> Search(string query, int maxResults = 8)
+```
+
+Prefix matches are sorted before contains matches so that typing `"vs"` surfaces **Visual Studio Code** before **AVS Audio Converter**, even though both contain the substring `"vs"`.
+
+### `Launch(item)`
+
+Launches a `LaunchItem` through the Windows Shell:
+
+```csharp
+void Launch(LaunchItem item)
+```
+
+Uses `Process.Start` with `UseShellExecute = true`, which makes Windows resolve the shortcut target, apply any working directory specified in the `.lnk`, and handle UAC elevation prompts. Works correctly for `.lnk` shortcuts, `.exe` paths, and folder paths.
+
+### `RunQuery(query)`
+
+Executes an arbitrary string directly via the Shell, equivalent to typing in the **Win+R** Run dialog:
+
+```csharp
+void RunQuery(string query)
+```
+
+Accepts executable names on `PATH`, absolute file/folder paths, and `shell:` URIs. Does **not** open a browser or perform a web search.
+
+<Note>
+The app launcher indexes only **Start Menu shortcuts** (`.lnk` files in the Programs folders). Executables that live on your `PATH` but have no Start Menu entry — for example `git`, `node`, or custom scripts — are not listed in the suggestions panel. To run them, type the command name (or full path) and press `Enter` when no suggestions appear. BetterWinTab passes the raw query to `LaunchService.RunQuery`, which resolves it through the Windows Shell just like the Win+R dialog does.
+</Note>

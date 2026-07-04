@@ -1,0 +1,231 @@
+---
+title: "AppSettings Model Reference"
+sidebarTitle: "AppSettings"
+description: "Complete reference for the AppSettings class and nested AppearanceSettings and PinnedWindowId types that control all BetterWinTab configuration."
+---
+
+`AppSettings` is the root configuration object for BetterWinTab. It encompasses hotkey bindings, thumbnail behavior, appearance theming, clipboard history, pinned windows, and startup preferences. All settings are loaded and saved by `SettingsService` and survive application restarts.
+
+<Note>
+  Settings are persisted at `%APPDATA%\BetterWinTab\settings.json` using JSON serialization with **camelCase** property names and indented formatting. If the file is missing or corrupt, `SettingsService.Load()` silently returns a new `AppSettings` instance with all defaults.
+</Note>
+
+---
+
+## AppSettings
+
+### Folder Configuration
+
+<ParamField path="Folders" type="List<WindowFolder>" default="[]">
+  The saved folder configuration. Each entry is a `WindowFolder` that groups windows by type (Manual, SmartProcess, SmartRules, etc.). Folders are displayed in `SortOrder` order in the sidebar. See the [WindowFolder reference](/reference/models/window-folder) for the full schema.
+</ParamField>
+
+---
+
+### Hotkey Binding
+
+<ParamField path="HotkeyModifiers" type="uint" default="0x0002">
+  Bitmask of modifier keys for the global activation hotkey, passed to `RegisterHotKey`. Use the Windows API constants to combine modifiers:
+
+  | Constant | Value | Key |
+  |---|---|---|
+  | `MOD_ALT` | `0x0001` | Alt |
+  | `MOD_CONTROL` | `0x0002` | Ctrl |
+  | `MOD_SHIFT` | `0x0004` | Shift |
+  | `MOD_WIN` | `0x0008` | Win |
+
+  The default `0x0002` maps to **Ctrl** only. Combine values with bitwise OR — for example, `0x0006` = Ctrl + Shift.
+</ParamField>
+
+<ParamField path="HotkeyVKey" type="uint" default="0x09">
+  The virtual key code for the hotkey trigger, used alongside `HotkeyModifiers`. The default `0x09` is `VK_TAB`, producing the **Ctrl + Tab** activation chord. Any valid [Windows virtual key code](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes) is accepted.
+</ParamField>
+
+---
+
+### Thumbnail & Preview
+
+<ParamField path="ShowLivePreviews" type="bool" default="true">
+  When `true`, window cards display live DWM thumbnails rendered via the Desktop Window Manager thumbnail API. When `false`, static process icons are used instead. Disabling live previews can improve performance on lower-end hardware or with many open windows.
+</ParamField>
+
+<ParamField path="ThumbnailWidth" type="int" default="320">
+  Width in pixels of each window thumbnail preview card. Applies when `ShowLivePreviews` is `true`.
+</ParamField>
+
+<ParamField path="ThumbnailHeight" type="int" default="200">
+  Height in pixels of each window thumbnail preview card. Applies when `ShowLivePreviews` is `true`.
+</ParamField>
+
+---
+
+### Appearance & Theming
+
+<ParamField path="Appearance" type="AppearanceSettings" default="new AppearanceSettings()">
+  The active theme color configuration. All 15 color token fields are hex strings (e.g., `"#39FF14"`). An empty or null string for any individual token reverts that token to its default. See [AppearanceSettings](#appearancesettings) below for all available tokens.
+</ParamField>
+
+<ParamField path="CustomPresets" type="List<ThemePreset>" default="[]">
+  A list of user-saved named theme presets. Each `ThemePreset` carries a `Name` string and a full `AppearanceSettings` snapshot. Custom presets are displayed in the Settings panel for one-click theme switching.
+
+  ```csharp
+  public class ThemePreset
+  {
+      public string Name { get; set; } = "";
+      public AppearanceSettings Appearance { get; set; } = new();
+  }
+  ```
+</ParamField>
+
+---
+
+### Startup
+
+<ParamField path="RunAtStartup" type="bool" default="false">
+  When `true`, `SettingsService.SetRunAtStartup(true)` writes the executable path to `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` under the key `BetterWinTab`, causing the app to launch automatically when the current user logs in to Windows. Setting this to `false` removes the registry entry.
+</ParamField>
+
+---
+
+### Pinned Windows
+
+<ParamField path="PinnedWindows" type="List<PinnedWindowId>" default="[]">
+  A list of pinned window identifiers that survive application restarts. Because Win32 window handles (`HWND`) are volatile and change across reboots, each entry uses a `PinnedWindowId` record (process name + title pattern) to re-identify the same logical window after a restart. Pinned windows appear first in every folder view and are surfaced regardless of folder filtering. See [PinnedWindowId](#pinnedwindowid) below.
+</ParamField>
+
+---
+
+### Clipboard History
+
+<ParamField path="ClipboardHistoryMaxItems" type="int" default="50">
+  The maximum number of clipboard history entries retained in memory and displayed in the Clipboard folder. Once the limit is reached, the oldest item is evicted when a new one is added.
+</ParamField>
+
+<ParamField path="ClipboardHistoryEnabled" type="bool" default="true">
+  Master switch for clipboard history tracking. When `false`, the app stops monitoring clipboard change events and the Clipboard folder remains empty.
+</ParamField>
+
+<ParamField path="PinnedClipboardItems" type="List<string>" default="[]">
+  Text strings for clipboard items explicitly pinned by the user. Pinned clipboard items survive the `ClipboardHistoryMaxItems` eviction policy and application restarts. Each entry is the raw copied text content.
+</ParamField>
+
+---
+
+### Onboarding
+
+<ParamField path="HasCompletedOnboarding" type="bool" default="false">
+  Tracks whether the first-run onboarding walkthrough has been completed or explicitly skipped. When `false`, the onboarding flow is presented on next launch. Set to `true` after the user completes or dismisses the walkthrough.
+</ParamField>
+
+---
+
+## AppearanceSettings
+
+`AppearanceSettings` holds all 15 color token fields that drive BetterWinTab's visual theme. Every field is a hex color string (e.g., `"#RRGGBB"` or `"#AARRGGBB"` for values with alpha). Call `AppearanceSettings.Default()` to get a fresh instance pre-populated with all default values.
+
+<ParamField path="AccentColor" type="string" default='"#39FF14"'>
+  Primary accent color. Used for active selection highlights, focused borders, and interactive element emphasis. Default is Neon Green.
+</ParamField>
+
+<ParamField path="AccentDimColor" type="string" default='"#1A8A0A"'>
+  Dimmed variant of the accent color. Used for secondary highlights and non-focused accent elements.
+</ParamField>
+
+<ParamField path="AccentSubtleColor" type="string" default='"#0D3D06"'>
+  Subtle background tint derived from the accent color. Used for low-emphasis accent-tinted surfaces.
+</ParamField>
+
+<ParamField path="BackgroundColor" type="string" default='"#000000"'>
+  The root application background color. Applied to the main overlay window surface. Default is pure black.
+</ParamField>
+
+<ParamField path="SurfaceColor" type="string" default='"#0A0A0A"'>
+  Elevated surface color, used for panels and containers that sit above the background layer.
+</ParamField>
+
+<ParamField path="CardColor" type="string" default='"#111111"'>
+  Card-level surface color. Applied to individual window preview cards and list items.
+</ParamField>
+
+<ParamField path="BorderColor" type="string" default='"#1A1A1A"'>
+  Default border color for dividers, card outlines, and panel edges.
+</ParamField>
+
+<ParamField path="TextPrimaryColor" type="string" default='"#FFFFFF"'>
+  Primary text color for window titles, folder names, and all high-emphasis labels.
+</ParamField>
+
+<ParamField path="TextSecondaryColor" type="string" default='"#AAAAAA"'>
+  Secondary text color for supporting metadata such as process names and desktop labels.
+</ParamField>
+
+<ParamField path="TextMutedColor" type="string" default='"#666666"'>
+  Muted text color for placeholder text, disabled labels, and low-priority information.
+</ParamField>
+
+<ParamField path="DangerColor" type="string" default='"#FF3344"'>
+  Danger/error color. Used for destructive action confirmations and error state indicators.
+</ParamField>
+
+<ParamField path="FolderHoverColor" type="string" default='"#1A39FF14"'>
+  Overlay color applied to a folder item in the sidebar on hover. Includes alpha channel (`#AARRGGBB`).
+</ParamField>
+
+<ParamField path="FolderSelectedColor" type="string" default='"#2939FF14"'>
+  Overlay color applied to the currently selected folder item in the sidebar. Includes alpha channel.
+</ParamField>
+
+<ParamField path="WindowHoverBorderColor" type="string" default='"#6639FF14"'>
+  Border color applied to a window card when the cursor hovers over it. Includes alpha channel.
+</ParamField>
+
+<ParamField path="WindowHoverBackgroundColor" type="string" default='"#0C39FF14"'>
+  Background overlay color applied to a window card on hover. Includes alpha channel.
+</ParamField>
+
+---
+
+## PinnedWindowId
+
+`PinnedWindowId` identifies a logical window using its process name and a title pattern. Because Win32 `HWND` values are volatile and do not persist across reboots, BetterWinTab uses process name + title matching to re-identify and re-pin windows on each launch.
+
+<ParamField path="ProcessName" type="string" default='""'>
+  The executable name of the target process, **without** the file extension (e.g., `"Code"`, `"chrome"`, `"notepad"`). Matching is case-insensitive. Must match `WindowInfo.ProcessName` exactly (after case normalization) for the pin to apply.
+</ParamField>
+
+<ParamField path="TitlePattern" type="string" default='""'>
+  A pattern matched against the window's title bar text. Supports `*` as a wildcard character at the start and/or end of the string for flexible substring matching. All comparisons are case-insensitive.
+
+  | Pattern | Behavior | Example match |
+  |---|---|---|
+  | `""` or `"*"` | Matches any title for the given process | — |
+  | `"MyApp"` | Exact title match | `"MyApp"` only |
+  | `"*report*"` | Contains match | `"Q3 report final"` |
+  | `"*final"` | Ends-with match | `"Q3 report final"` |
+  | `"Draft*"` | Starts-with match | `"Draft v2"` |
+</ParamField>
+
+### `Matches(WindowInfo window)` Method
+
+The `Matches` method first checks `ProcessName` with an ordinal case-insensitive equality test. If the process name does not match, it returns `false` immediately. Otherwise it evaluates `TitlePattern` as follows:
+
+```csharp
+// 1. An empty pattern or bare "*" matches any title.
+if (string.IsNullOrEmpty(TitlePattern) || TitlePattern == "*")
+    return true;
+
+// 2. Strip leading/trailing '*' to extract the core string.
+bool startsWild = pattern.StartsWith('*');
+bool endsWild   = pattern.EndsWith('*');
+var  core       = pattern.Trim('*');
+
+// 3. Dispatch to the appropriate string comparison.
+if (startsWild && endsWild) return window.Title.Contains(core, OrdinalIgnoreCase);
+if (startsWild)             return window.Title.EndsWith(core,   OrdinalIgnoreCase);
+if (endsWild)               return window.Title.StartsWith(core, OrdinalIgnoreCase);
+                            return window.Title.Equals(core,     OrdinalIgnoreCase);
+```
+
+<Note>
+  Wildcards are only recognized at the very start and end of `TitlePattern`. A `*` in the middle of the string is treated as a literal character during the `Trim('*')` step and will not match as a wildcard.
+</Note>

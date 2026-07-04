@@ -1,0 +1,105 @@
+---
+title: "Install BetterWinTab on Windows 10 and 11"
+sidebarTitle: "Installation"
+description: "Download and install BetterWinTab using the Inno Setup installer or portable zip on Windows 10 build 19041 or Windows 11."
+---
+
+This page walks you through everything you need to install BetterWinTab on your Windows machine, whether you prefer a traditional setup wizard or a self-contained portable build you can run from any folder.
+
+## System Requirements
+
+| Requirement | Minimum |
+|---|---|
+| **OS** | Windows 10 build 19041 (May 2020 Update) or Windows 11 |
+| **Architecture** | x64 (AMD64) |
+| **Runtime** | WebView2 Runtime (installed automatically by the setup wizard if missing) |
+| **Disk space** | ~100 MB |
+
+<Note>
+  The installer uses **per-user privilege level** by default, which means no UAC administrator prompt is required. BetterWinTab installs entirely under your own user profile. If you need a system-wide install for all users on a shared machine, the installer will offer an elevation option at setup time.
+</Note>
+
+## Choosing an Install Method
+
+<Tabs>
+  <Tab title="Installer (recommended)">
+    The Inno Setup installer is the recommended path for most users. It handles the WebView2 Runtime dependency, creates Start Menu shortcuts, and optionally registers BetterWinTab to launch at Windows startup.
+
+    <Steps>
+      <Step title="Download the installer">
+        Go to the [BetterWinTab Releases page](https://github.com/sgm1018/BetterWinTab/releases) and download the latest `BetterWinTab-Setup-x.x.x-x64.exe` file.
+      </Step>
+
+      <Step title="Run the setup wizard">
+        Double-click the downloaded `.exe`. Because the installer runs at the per-user privilege level, no UAC elevation prompt will appear in the typical case.
+      </Step>
+
+      <Step title="Accept the WebView2 Runtime install (if prompted)">
+        If WebView2 is not already present on your machine, the installer automatically downloads and silently installs the Microsoft Edge WebView2 Evergreen Bootstrapper before completing setup. This step is fully automatic — you will see a brief status message and it will proceed on its own.
+      </Step>
+
+      <Step title="Choose startup behavior">
+        The wizard includes a **"Launch BetterWinTab on Windows startup"** option that is checked by default. Leave it checked to have BetterWinTab start silently with Windows, or uncheck it if you prefer to launch it manually. You can change this at any time later in **Settings → General**.
+      </Step>
+
+      <Step title="Finish and launch">
+        Click **Finish**. BetterWinTab starts immediately and a system tray icon appears in the notification area. The first-run onboarding walkthrough will guide you through the basics.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Portable zip">
+    The portable build is a self-contained folder with no installer. Nothing is written to the registry and no system-level changes are made. Useful for USB drives, developer machines, or environments where you want full control.
+
+    <Steps>
+      <Step title="Download the portable zip">
+        Go to the [BetterWinTab Releases page](https://github.com/sgm1018/BetterWinTab/releases) and download the latest `BetterWinTab-x.x.x-win-x64-portable.zip` file.
+      </Step>
+
+      <Step title="Extract the archive">
+        Extract the zip to any folder of your choice — for example `C:\Tools\BetterWinTab\` or a USB drive. All required files are included in the archive.
+      </Step>
+
+      <Step title="Ensure WebView2 is installed">
+        The portable build does **not** bundle a WebView2 installer. If your machine does not already have the WebView2 Runtime (all modern Windows 10/11 systems include it by default via Windows Update), install it manually from [Microsoft's WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/).
+      </Step>
+
+      <Step title="Run BetterWinTab.exe">
+        Open the extracted folder and double-click `BetterWinTab.exe`. The system tray icon will appear and the first-run onboarding walkthrough will start.
+      </Step>
+    </Steps>
+
+    <Note>
+      To enable launch at Windows startup with the portable build, go to **Settings → General** and toggle **Run at startup**. BetterWinTab will add itself to the `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` registry key — no admin rights required.
+    </Note>
+  </Tab>
+</Tabs>
+
+## First Launch
+
+Regardless of which install method you used, the first launch experience is the same:
+
+1. A **system tray icon** appears in the Windows notification area (bottom-right of the taskbar). Right-click it to access Settings, quit, or restart the app.
+2. The **first-run onboarding walkthrough** opens automatically (`HasCompletedOnboarding` is `false` by default). It covers the activation hotkey, folder setup, and basic navigation. You can skip it and return at any time.
+3. Press `Ctrl + Tab` to open the overlay for the first time.
+
+## Enabling Launch at Startup
+
+You can configure BetterWinTab to start automatically with Windows in two ways:
+
+- **During installer setup** — the "Launch BetterWinTab on Windows startup" task is checked by default in the Inno Setup wizard.
+- **After installation** — open the overlay, press the settings icon (or right-click the tray icon and choose **Settings**), navigate to **General**, and toggle **Run at startup**.
+
+If you chose not to enable startup during setup, the installer will show a brief reminder that you can enable it later from **Settings → General**.
+
+## Uninstalling BetterWinTab
+
+<Tabs>
+  <Tab title="Installer build">
+    Open **Windows Settings → Apps → Installed apps** (or **Apps & features** on Windows 10), search for **BetterWinTab**, and click **Uninstall**. The uninstaller removes all program files, Start Menu shortcuts, and the startup registry entry. User settings stored under `%APPDATA%\BetterWinTab` are also removed so that a future fresh install starts from scratch.
+  </Tab>
+
+  <Tab title="Portable build">
+    Close BetterWinTab (right-click the tray icon → **Quit**), then delete the folder you extracted the zip into. If you enabled **Run at startup** from Settings, also remove the startup entry via **Task Manager → Startup apps**, or by deleting the `BetterWinTab` value from `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` in the Registry Editor.
+  </Tab>
+</Tabs>

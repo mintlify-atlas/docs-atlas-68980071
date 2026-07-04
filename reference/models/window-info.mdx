@@ -1,0 +1,118 @@
+---
+title: "WindowInfo Model Reference"
+sidebarTitle: "WindowInfo"
+description: "Reference for the WindowInfo class that represents an open Windows window, including handle, process, title, class, virtual desktop metadata, and pin state."
+---
+
+`WindowInfo` is the core data model representing a single open window on the Windows desktop. Instances are created and refreshed by the window enumeration service, which calls `EnumWindows` and augments each result with process metadata, virtual desktop assignments, and user pin state. The collection of `WindowInfo` objects is the live data source for all folders and the main window grid.
+
+<Note>
+  Two `WindowInfo` instances are considered equal if and only if their `Handle` values match. Equality and `GetHashCode()` are both implemented against `Handle`.
+</Note>
+
+---
+
+## Properties
+
+### Core Identity
+
+<ParamField path="Handle" type="IntPtr">
+  The Win32 window handle (`HWND`) for this window. Used as the primary key for all window lookup, equality checks, and Win32 API calls (focus, thumbnail registration, etc.).
+
+  <Warning>
+    Window handles are **volatile**. They are assigned by the OS at window creation time and are not preserved across process restarts or system reboots. Never persist a raw `Handle` value to disk — use `PinnedWindowId` (process name + title pattern) instead for durable window identification.
+  </Warning>
+</ParamField>
+
+<ParamField path="Title" type="string" default='""'>
+  The text currently displayed in the window's title bar, retrieved via `GetWindowText`. This value reflects the live title at enumeration time; it is not automatically updated if the window title changes after the snapshot is taken.
+</ParamField>
+
+<ParamField path="ProcessName" type="string" default='""'>
+  The executable name of the owning process, **without** the file extension. Examples: `"Code"` for Visual Studio Code, `"chrome"` for Google Chrome, `"notepad"` for Notepad. This is the value used by `PinnedWindowId` for process-level matching.
+</ParamField>
+
+<ParamField path="ProcessId" type="int">
+  The operating system process identifier (PID) of the owning process, as returned by `GetWindowThreadProcessId`. Useful for cross-referencing with `System.Diagnostics.Process` or Task Manager.
+</ParamField>
+
+<ParamField path="ClassName" type="string" default='""'>
+  The Win32 window class name registered for this window, retrieved via `GetClassName`. Examples include `"Chrome_WidgetWin_1"` for Chromium-based windows or `"Notepad"` for Notepad. Used by `SmartClass` folder filtering.
+</ParamField>
+
+---
+
+### Icon
+
+<ParamField path="IconPath" type="string?" default="null">
+  File system path to the icon image associated with this window's process. Resolved by the icon extraction service from the process executable. Nullable — may be `null` if icon extraction fails or the process is inaccessible (e.g., elevated system processes).
+</ParamField>
+
+---
+
+### State
+
+<ParamField path="IsMinimized" type="bool">
+  `true` when the window is currently minimized (iconic). Determined via `IsIconic(hwnd)`. Minimized windows are still enumerated and displayed in BetterWinTab; selecting them will restore and focus them.
+</ParamField>
+
+<ParamField path="LastActiveTime" type="DateTime" default="DateTime.Now">
+  The timestamp of the last time this window was the foreground window, as tracked by BetterWinTab's focus-change listener. Defaults to the enumeration time if no prior focus event has been recorded. Used to sort windows by recency within a folder.
+</ParamField>
+
+---
+
+### Virtual Desktop
+
+<ParamField path="DesktopId" type="Guid" default="Guid.Empty">
+  The GUID of the virtual desktop this window belongs to, obtained from the `IVirtualDesktopManager` COM interface. Each virtual desktop has a stable GUID for the duration of the Windows session.
+
+  <Warning>
+    If `IVirtualDesktopManager` is unavailable (e.g., running in a restricted environment, or the COM call fails), `DesktopId` is set to `Guid.Empty`. Code that uses this field should always check for `Guid.Empty` before treating it as a valid desktop identifier.
+  </Warning>
+</ParamField>
+
+<ParamField path="DesktopNumber" type="int" default="0">
+  The 1-based ordinal position of the virtual desktop (e.g., `1` = first desktop, `2` = second). A value of `0` indicates the desktop number could not be determined. This value can shift if the user reorders or closes virtual desktops.
+</ParamField>
+
+<ParamField path="DesktopName" type="string" default='""'>
+  The human-readable display name of the virtual desktop. This may be the OS-generated default (e.g., `"Desktop 1"`, `"Escritorio 2"` in a localized OS) or a custom name set by the user in Task View. Used as a label in the window card UI.
+</ParamField>
+
+<ParamField path="IsOnCurrentDesktop" type="bool" default="true">
+  `true` when this window resides on the currently active virtual desktop. Updated during each window enumeration pass. BetterWinTab can optionally filter or dim windows not on the current desktop based on this flag.
+</ParamField>
+
+---
+
+### Pin State
+
+<ParamField path="IsPinned" type="bool" default="false">
+  `true` when the user has pinned this window. Pinned windows are displayed first in all folder views, above non-pinned windows, regardless of sort order or filter. This flag is set at enumeration time by matching the window against the `PinnedWindows` list in `AppSettings` via `PinnedWindowId.Matches()`.
+</ParamField>
+
+---
+
+## Methods
+
+### `ToString()`
+
+Returns a human-readable representation of the window in the format `"ProcessName: Title"`. For example:
+
+```
+Code: Program.cs - MyProject - Visual Studio Code
+```
+
+### Equality
+
+`WindowInfo` overrides `Equals` and `GetHashCode` to compare solely by `Handle`:
+
+```csharp
+public override bool Equals(object? obj) =>
+    obj is WindowInfo other && Handle == other.Handle;
+
+public override int GetHashCode() => Handle.GetHashCode();
+```
+
+This means a `WindowInfo` can be used as a key in `Dictionary<WindowInfo, T>` or stored in a `HashSet<WindowInfo>`, with identity determined by HWND.

@@ -1,0 +1,148 @@
+---
+title: "SettingsService API Reference"
+sidebarTitle: "SettingsService"
+description: "SettingsService persists AppSettings to JSON in %APPDATA%\\BetterWinTab and manages the Windows startup registry entry. Documents Load, Save, GetRunAtStartup, and SetRunAtStartup."
+---
+
+`SettingsService` is responsible for reading and writing the application configuration to disk and for managing the Windows startup registry entry. Settings are stored as **indented camelCase JSON** in the user's roaming `%APPDATA%` directory. All I/O errors are caught and written to `System.Diagnostics.Debug` output rather than propagated as exceptions, so callers do not need try/catch wrappers.
+
+---
+
+## Storage locations
+
+| Resource | Path |
+|----------|------|
+| Settings file | `%APPDATA%\BetterWinTab\settings.json` |
+| Settings directory | `%APPDATA%\BetterWinTab\` |
+| Startup registry key | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` |
+| Startup registry value name | `BetterWinTab` |
+
+---
+
+## Sample `settings.json`
+
+```json
+{
+  "folders": [
+    {
+      "id": "a1b2c3d4-...",
+      "name": "Browsers",
+      "icon": "\uE756",
+      "backgroundColor": "#2D3A2D",
+      "type": 2,
+      "processFilter": "chrome",
+      "sortOrder": 1
+    }
+  ],
+  "hotkeyModifiers": 2,
+  "hotkeyVKey": 9,
+  "showLivePreviews": true,
+  "thumbnailWidth": 320,
+  "thumbnailHeight": 200,
+  "appearance": {
+    "accentColor": "#39FF14",
+    "backgroundColor": "#000000"
+  },
+  "runAtStartup": false,
+  "clipboardHistoryMaxItems": 50,
+  "clipboardHistoryEnabled": true,
+  "hasCompletedOnboarding": false
+}
+```
+
+The file is serialized with `JsonNamingPolicy.CamelCase` and `WriteIndented = true`.
+
+---
+
+## Methods
+
+### `Load()`
+
+Reads `settings.json` from disk and deserializes it into an `AppSettings` object. If the file does not exist or deserialization fails for any reason, a default `new AppSettings()` instance is returned — the application always starts in a valid state.
+
+```csharp
+public AppSettings Load()
+```
+
+<ResponseField name="return" type="AppSettings">
+  The deserialized settings, or a default `AppSettings` instance if the file is absent or unreadable. Errors are written to `Debug.WriteLine` and do not throw.
+</ResponseField>
+
+**Example:**
+
+```csharp
+var settingsService = new SettingsService();
+AppSettings settings = settingsService.Load();
+```
+
+---
+
+### `Save(AppSettings)`
+
+Serializes the provided `AppSettings` object to camelCase JSON and writes it to `settings.json`. Creates `%APPDATA%\BetterWinTab\` if it does not already exist. Errors are caught and written to `Debug.WriteLine` — the method never throws.
+
+```csharp
+public void Save(AppSettings settings)
+```
+
+<ParamField path="settings" type="AppSettings" required>
+  The settings object to persist. All public properties are serialized.
+</ParamField>
+
+**Example:**
+
+```csharp
+settings.ShowLivePreviews = false;
+settingsService.Save(settings);
+```
+
+---
+
+### `GetRunAtStartup()`
+
+Checks whether a `BetterWinTab` value exists under `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` to determine if the application is registered to launch at Windows sign-in.
+
+```csharp
+public bool GetRunAtStartup()
+```
+
+<ResponseField name="return" type="bool">
+  `true` if the `BetterWinTab` registry value is present (regardless of its data); `false` if the value is absent or the registry key cannot be opened. Errors are caught silently.
+</ResponseField>
+
+**Registry path:**
+
+```
+HKEY_CURRENT_USER
+  └─ SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+       └─ BetterWinTab  REG_SZ  "C:\...\BetterWinTab.exe"
+```
+
+---
+
+### `SetRunAtStartup(bool)`
+
+Adds or removes the Windows startup registry entry for BetterWinTab.
+
+```csharp
+public void SetRunAtStartup(bool enable)
+```
+
+<ParamField path="enable" type="bool" required>
+  - `true` — writes the current executable path (quoted) as the `BetterWinTab` value under `HKCU\...\Run`.  
+  - `false` — deletes the `BetterWinTab` value if it exists; no-op if already absent.
+</ParamField>
+
+When `enable` is `true`, the path is obtained from `Process.GetCurrentProcess().MainModule?.FileName` and written as a quoted string, e.g.:
+
+```
+"C:\Users\Alice\AppData\Local\BetterWinTab\BetterWinTab.exe"
+```
+
+If `MainModule?.FileName` is null or empty, no registry write occurs. Errors are caught silently and written to `Debug.WriteLine`.
+
+**Example — toggle based on a settings property:**
+
+```csharp
+settingsService.SetRunAtStartup(settings.RunAtStartup);
+```

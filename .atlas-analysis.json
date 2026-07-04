@@ -1,0 +1,107 @@
+{
+  "projectType": "saas",
+  "projectName": "BetterWinTab",
+  "projectDescription": "A keyboard-first, hierarchical window manager for Windows that replaces Alt+Tab with a searchable, folder-organized overlay built on C#, .NET 8, and WinUI 3.",
+  "theme": "luma",
+  "primaryColor": "#43f508",
+  "lightColor": "#21650f",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/window-navigation",
+              "features/smart-folders",
+              "features/fuzzy-search",
+              "features/app-launcher",
+              "features/clipboard-history"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/hotkeys",
+              "configuration/settings",
+              "configuration/themes"
+            ]
+          },
+          {
+            "group": "For Contributors",
+            "pages": [
+              "development/building",
+              "development/debugging",
+              "development/publishing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Models",
+            "pages": [
+              "reference/models/app-settings",
+              "reference/models/window-info",
+              "reference/models/window-folder"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "reference/services/folder-service",
+              "reference/services/hotkey-service",
+              "reference/services/settings-service",
+              "reference/services/update-service",
+              "reference/services/virtual-desktop-service"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Keyboard-first overlay activated with Ctrl+Tab (configurable)",
+    "Smart Folders that auto-group windows by process name, class, or custom rules (AND/OR logic)",
+    "Real-time fuzzy search across all open windows with typo tolerance",
+    "App Launcher — launch installed apps when no window matches the query",
+    "Clipboard History panel showing recent text entries with pin support",
+    "Virtual Desktop awareness — shows desktop number and name per window",
+    "Live DWM thumbnail previews for each window",
+    "Full theme customization with semantic color tokens and named presets",
+    "Recycle Bin shortcut accessible directly from the overlay",
+    "Native WinUI 3 / .NET 8 runtime — no Electron, no web renderer"
+  ],
+  "publicApiSurface": [
+    "AppSettings — persisted settings model (hotkeys, appearance, folders, clipboard)",
+    "AppearanceSettings — 15 semantic color tokens for full theme customization",
+    "ThemePreset — named color scheme saved/loaded from settings",
+    "WindowFolder — folder model with FolderType enum (All, Manual, SmartProcess, SmartClass, SmartRules, Clipboard, RecycleBin)",
+    "FolderRuleGroup / FolderRuleCondition — composite AND/OR rule engine for Smart Folders",
+    "WindowInfo — window metadata (handle, title, process, class, desktop, pinned state)",
+    "FolderService.CreateSmartProcessFolder() — create a smart folder filtered by process name",
+    "FolderService.CreateManualFolder() — create a manually-managed folder",
+    "FolderService.CreateSmartRulesFolder() — create a rule-based smart folder",
+    "FolderService.CreateClipboardFolder() — create the clipboard history folder",
+    "FolderService.CreateRecycleBinFolder() — create the Recycle Bin folder",
+    "HotkeyService.Configure(modifiers, vKey) — change the activation hotkey at runtime",
+    "HotkeyService.Install(DispatcherQueue) — install the low-level keyboard hook",
+    "SettingsService.Load() / Save(AppSettings) — persist settings to %APPDATA%\\BetterWinTab\\settings.json",
+    "UpdateService.CheckAsync() — check GitHub Releases for a newer version",
+    "UpdateService.DownloadAndInstallAsync() — download and launch the latest installer",
+    "VirtualDesktopService.EnrichWindows(List<WindowInfo>) — add virtual desktop metadata to windows",
+    "VirtualDesktopService.SwitchToWindowDesktop(IntPtr) — move a window to the current desktop"
+  ]
+}
