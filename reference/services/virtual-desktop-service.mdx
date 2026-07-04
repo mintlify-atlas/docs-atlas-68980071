@@ -1,7 +1,7 @@
 ---
-title: "VirtualDesktopService API Reference"
+title: "VirtualDesktopService — Virtual Desktop COM API Reference"
 sidebarTitle: "VirtualDesktopService"
-description: "VirtualDesktopService wraps the Windows IVirtualDesktopManager COM interface to enrich windows with desktop metadata and move windows between virtual desktops."
+description: "VirtualDesktopService wraps IVirtualDesktopManager to enrich BetterWinTab windows with desktop GUID, number, name, and current-desktop status."
 ---
 
 `VirtualDesktopService` wraps the Windows `IVirtualDesktopManager` COM interface (`CLSID_VirtualDesktopManager`) to add virtual desktop awareness to BetterWinTab's window list. It enriches each `WindowInfo` object with the desktop GUID, 1-based desktop number, localized desktop name, and a flag indicating whether the window is on the currently active desktop. The service degrades gracefully — if COM activation fails, all operations become safe no-ops.
@@ -130,7 +130,7 @@ Any GUIDs found in windows that are absent from the registry blob are appended t
 
 ### `SwitchToWindowDesktop(IntPtr)`
 
-Brings a window to the current virtual desktop by calling `IVirtualDesktopManager.MoveWindowToDesktop`, then activates it.
+Brings a window to the current virtual desktop by calling `IVirtualDesktopManager.MoveWindowToDesktop`.
 
 ```csharp
 public bool SwitchToWindowDesktop(IntPtr hWnd)

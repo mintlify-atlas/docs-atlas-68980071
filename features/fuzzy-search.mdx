@@ -36,13 +36,13 @@ The `FuzzyMatcher` static class (`Services/FuzzyMatcher.cs`) implements an fzf-i
 
 ### Scoring Breakdown
 
-The scorer reads through the text left-to-right and tries to consume every character in the query in order. Each character match contributes to the score through several bonuses:
+The scorer reads through the text left-to-right and tries to consume every character in the query in order. Each matched character contributes `+10` to the score. Additional bonuses are applied per match:
 
 | Bonus / Penalty | Amount | Trigger |
 |---|---|---|
 | Base match | `+10` | Each matched character |
-| Consecutive run | `+(consecutive × 5)` | Matching characters that are adjacent to each other |
-| Word boundary | `+20` | Match at position 0, or after a space, `-`, `_`, `.`, `/`, or `\` |
+| Consecutive run | `+(consecutive × 5)` | Each matched character that continues an unbroken run of adjacent matches |
+| Word boundary | `+20` | Match at position 0, or immediately after a space, `-`, `_`, `.`, `/`, or `\` |
 | Case-exact | `+2` | Matched character has the same case as the query character |
 | Early first match | `+max(0, 50 − firstMatchIndex × 3)` | Rewards matches that start near the beginning of the text |
 | Length penalty | `−(text.Length − query.Length) / 4` | Prefers shorter texts (fewer unmatched characters) |
@@ -59,8 +59,9 @@ Scores are clamped to a minimum of 0.
 
 ```csharp
 // Example: "google crome" against a Chrome window
+// Fields searched: Title and ProcessName only (ClassName is excluded)
 FuzzyMatcher.MultiWordMatch(
-    new[] { "Google Gemini - Brave", "chrome", "Chrome_WidgetWin_1" },
+    new[] { "Google Gemini - Brave", "chrome" },
     "google crome"
 );
 // "google" → exact match in title field

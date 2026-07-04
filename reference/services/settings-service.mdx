@@ -1,7 +1,7 @@
 ---
-title: "SettingsService API Reference"
+title: "SettingsService — Settings Persistence API Reference"
 sidebarTitle: "SettingsService"
-description: "SettingsService persists AppSettings to JSON in %APPDATA%\\BetterWinTab and manages the Windows startup registry entry. Documents Load, Save, GetRunAtStartup, and SetRunAtStartup."
+description: "SettingsService persists BetterWinTab settings to JSON in %APPDATA% and manages the Windows startup registry entry. Covers Load, Save, and run-at-startup."
 ---
 
 `SettingsService` is responsible for reading and writing the application configuration to disk and for managing the Windows startup registry entry. Settings are stored as **indented camelCase JSON** in the user's roaming `%APPDATA%` directory. All I/O errors are caught and written to `System.Diagnostics.Debug` output rather than propagated as exceptions, so callers do not need try/catch wrappers.

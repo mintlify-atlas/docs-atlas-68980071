@@ -1,7 +1,7 @@
 ---
-title: "WindowInfo Model Reference"
+title: "WindowInfo Model – BetterWinTab Window Data Reference"
 sidebarTitle: "WindowInfo"
-description: "Reference for the WindowInfo class that represents an open Windows window, including handle, process, title, class, virtual desktop metadata, and pin state."
+description: "Reference for the WindowInfo class representing an open Windows window, covering handle, process, title, class, virtual desktop metadata, and pin state."
 ---
 
 `WindowInfo` is the core data model representing a single open window on the Windows desktop. Instances are created and refreshed by the window enumeration service, which calls `EnumWindows` and augments each result with process metadata, virtual desktop assignments, and user pin state. The collection of `WindowInfo` objects is the live data source for all folders and the main window grid.

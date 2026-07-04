@@ -40,25 +40,18 @@ The activation hotkey can be changed from **Settings → General** — any modif
 
 When you select a window card, BetterWinTab registers a **DWM (Desktop Window Manager) thumbnail** — a real-time mirror of the window's content rendered directly by the compositor at zero CPU cost. The thumbnail updates live even while the source window is minimized or on another virtual desktop.
 
-Preview rendering is controlled by two settings:
-
-| Setting | Default | Description |
-|---|---|---|
-| `ShowLivePreviews` | `true` | Enables or disables live DWM thumbnails. When `false`, only the app icon is shown. |
-| `ThumbnailWidth` | `320` | Width of the thumbnail area in pixels. |
-| `ThumbnailHeight` | `200` | Height of the thumbnail area in pixels. |
-
-Both dimensions can be adjusted in **Settings → General**. The DWM compositor handles all scaling and clipping, so the thumbnail maintains a correct aspect ratio within the configured bounds.
+The `ThumbnailService` manages thumbnail registrations by mapping source window handles to DWM thumbnail IDs. Calling `RegisterThumbnail(destinationWindow, sourceWindow)` registers a new thumbnail and automatically unregisters any existing thumbnail for the same source. The compositor handles all scaling and aspect-ratio clipping within the destination rectangle.
 
 ## Virtual Desktop Badges
 
 BetterWinTab integrates with the Windows `IVirtualDesktopManager` COM interface to surface per-window virtual desktop metadata. Each `WindowInfo` carries the following fields:
 
+- **`DesktopId`** — the `Guid` of the virtual desktop this window belongs to, as reported by `IVirtualDesktopManager`
 - **`DesktopNumber`** — 1-based desktop index (1 = first desktop, matching Windows Task View numbering)
 - **`DesktopName`** — human-readable name shown in the window card badge
 - **`IsOnCurrentDesktop`** — `true` when the window lives on the currently active virtual desktop
 
-Desktop badges are only shown in the UI when the system has more than one virtual desktop active (`HasMultipleDesktops`). If you use only a single desktop, no badge is rendered.
+Desktop badges are only shown in the UI when the system has more than one virtual desktop active (`VirtualDesktopService.HasMultipleDesktops`). If you use only a single desktop, no badge is rendered.
 
 Desktop names are read directly from the Windows registry key:
 
@@ -67,7 +60,32 @@ HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops\Desktops
 ```
 
 <Note>
-When a desktop has no custom name set in the registry, BetterWinTab falls back to a locale-aware label that matches what Windows Task View displays — for example **Desktop 1** in English, **Escritorio 2** in Spanish, **Bureau 3** in French, **Schreibtisch 4** in German, and so on. The fallback word is resolved from `CultureInfo.CurrentUICulture.TwoLetterISOLanguageName` at runtime, so it always matches the OS display language.
+When a desktop has no custom name set in the registry, BetterWinTab falls back to a locale-aware label that matches what Windows Task View displays. The fallback word is resolved from `CultureInfo.CurrentUICulture.TwoLetterISOLanguageName` at runtime. Supported languages include:
+
+| Language code | Label word |
+|---|---|
+| `es` | Escritorio |
+| `fr` | Bureau |
+| `de` | Schreibtisch |
+| `it` | Scrivania |
+| `pt` | Área de Trabalho |
+| `ja` | デスクトップ |
+| `zh` | 桌面 |
+| `ko` | 바탕 화면 |
+| `nl` | Bureaublad |
+| `ru` | Рабочий стол |
+| `pl` | Pulpit |
+| `tr` | Masaüstü |
+| `ar` | سطح المكتب |
+| `sv` | Skrivbord |
+| `nb` / `no` | Skrivebord |
+| `da` | Skrivebord |
+| `fi` | Työpöytä |
+| `cs` | Plocha |
+| `hu` | Asztal |
+| *(all others)* | Desktop |
+
+For example, Desktop 2 appears as **Escritorio 2** in Spanish, **Bureau 2** in French, and **Schreibtisch 2** in German.
 </Note>
 
 If a window is on a different virtual desktop, BetterWinTab can move it to the current desktop automatically when you press `Enter` to focus it — no manual Task View switching required.
@@ -102,4 +120,4 @@ All comparisons are case-insensitive.
 
 ## The Recycle Bin Folder
 
-The **Recycle Bin** is a special built-in folder (`FolderType.RecycleBin`) that is always pinned to the bottom of the sidebar and cannot be deleted. Selecting it and pressing `Enter` opens the Windows shell Recycle Bin directly — no need to minimize windows or navigate to the desktop. It is the fastest way to access the Recycle Bin from the keyboard.
+The **Recycle Bin** is a special built-in folder (`FolderType.RecycleBin`) that is always pinned to the bottom of the sidebar and cannot be deleted. Selecting it opens the Windows shell Recycle Bin directly via `explorer.exe shell:RecycleBinFolder` — no need to minimize windows or navigate to the desktop. It is the fastest way to access the Recycle Bin from the keyboard.

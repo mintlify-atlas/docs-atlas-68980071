@@ -1,5 +1,5 @@
 ---
-title: "WindowFolder and FolderRule Model Reference"
+title: "WindowFolder & FolderRule Models – BetterWinTab Reference"
 sidebarTitle: "WindowFolder"
 description: "Reference for the WindowFolder model, FolderType enum, FolderRuleGroup, FolderRuleCondition, RuleField, RuleComparison, and RuleOperator types."
 ---
@@ -150,6 +150,16 @@ public bool Matches(WindowInfo window)
 
 <ParamField path="Value" type="string" default='""'>
   The string to compare the field value against. For `Regex` comparisons this is a .NET regular expression pattern. All other comparisons treat this as a literal string.
+</ParamField>
+
+### Computed Display Properties
+
+<ParamField path="FieldDisplay" type="string">
+  Read-only computed property that returns `Field.ToString()`. Provides the string name of the active `RuleField` value (e.g., `"ProcessName"`, `"Title"`, `"ClassName"`). Used in compiled WinUI 3 XAML bindings where enum-to-string conversion is required directly in markup.
+</ParamField>
+
+<ParamField path="ComparisonDisplay" type="string">
+  Read-only computed property that returns `Comparison.ToString()`. Provides the string name of the active `RuleComparison` value (e.g., `"Equals"`, `"Contains"`, `"Regex"`). Used in compiled WinUI 3 XAML bindings for display in the rule editor UI.
 </ParamField>
 
 ### `Matches(WindowInfo window)` Method

@@ -1,7 +1,7 @@
 ---
-title: "UpdateService API Reference"
+title: "UpdateService — Auto-Update and Download API Reference"
 sidebarTitle: "UpdateService"
-description: "UpdateService checks the BetterWinTab GitHub Releases API for newer versions and downloads and launches the installer automatically."
+description: "UpdateService queries the BetterWinTab GitHub Releases API for newer versions and streams the installer to %TEMP% before launching it automatically."
 ---
 
 `UpdateService` provides self-update capabilities by querying the [GitHub Releases API](https://api.github.com/repos/sgm1018/BetterWinTab/releases/latest) for the latest published release, comparing it against the running assembly version, and streaming the installer to `%TEMP%` before launching it via the Windows shell. The service is designed to be called once at startup for a background check and optionally on-demand for user-initiated downloads.
@@ -174,7 +174,7 @@ public async Task<bool> DownloadAndInstallAsync(
   `true` if the download completed and the installer was launched. `false` if `InstallerDownloadUrl` is `null` or empty (i.e. `CheckAsync` was not called or found no update).
 </ResponseField>
 
-The download uses a **separate `HttpClient`** with an infinite timeout (`Timeout.InfiniteTimeSpan`) and an 80 KB streaming buffer. The filename is derived from the URL path — if the path segment is empty, it defaults to `BetterWinTab-Setup-{LatestVersion}-x64.exe`.
+The download uses a **separate `HttpClient`** with an infinite timeout (`Timeout.InfiniteTimeSpan`) and an 81,920-byte (80 KiB) streaming buffer. The filename is derived from the URL path — if the path segment is empty, it defaults to `BetterWinTab-Setup-{LatestVersion}-x64.exe`.
 
 **Progress lifecycle:**
 

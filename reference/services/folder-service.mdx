@@ -1,7 +1,7 @@
 ---
-title: "FolderService API Reference"
+title: "FolderService — Window Folder Management API Reference"
 sidebarTitle: "FolderService"
-description: "FolderService manages window folder creation, filtering, and persistence. Documents all public methods for creating smart, manual, clipboard, and recycle bin folders."
+description: "FolderService manages window folder creation, filtering, and persistence in BetterWinTab. Covers smart, manual, clipboard, and recycle bin folder methods."
 ---
 
 `FolderService` is the central authority for managing window folders (categories) in BetterWinTab. It holds a live `ObservableCollection<WindowFolder>` that the UI binds to, handles all filter evaluation against enumerated windows, and serializes/deserializes folder configuration through `AppSettings`. The service distinguishes between the built-in **All Windows** folder, user-created smart and manual folders, and the two singleton special folders — **Clipboard** and **Recycle Bin**.

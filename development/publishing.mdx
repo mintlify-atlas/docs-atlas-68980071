@@ -1,5 +1,5 @@
 ---
-title: "Publish and Release BetterWinTab"
+title: "Publish and Release BetterWinTab with Inno Setup and Actions"
 sidebarTitle: "Publishing"
 description: "Build a self-contained release, create the Inno Setup installer, package a portable zip, and trigger an automated GitHub release via git tag."
 ---
@@ -28,9 +28,9 @@ Three publish profiles are provided under `Properties/PublishProfiles/`. Each pr
 
 | Profile file | Platform flag | Runtime identifier | Output path |
 |---|---|---|---|
-| `win-x64.pubxml` | `x64` | `win-x64` | `bin\Release\...\win-x64\publish\` |
-| `win-x86.pubxml` | `x86` | `win-x86` | `bin\Release\...\win-x86\publish\` |
-| `win-arm64.pubxml` | `ARM64` | `win-arm64` | `bin\Release\...\win-arm64\publish\` |
+| `win-x64.pubxml` | `x64` | `win-x64` | `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\` |
+| `win-x86.pubxml` | `x86` | `win-x86` | `bin\Release\net8.0-windows10.0.19041.0\win-x86\publish\` |
+| `win-arm64.pubxml` | `ARM64` | `win-arm64` | `bin\Release\net8.0-windows10.0.19041.0\win-arm64\publish\` |
 
 To publish for a specific profile, pass its filename:
 
@@ -106,7 +106,7 @@ The Inno Setup script (`installer.iss`) produces an installer with these charact
 | Feature | Detail |
 |---|---|
 | **Install scope** | Per-user (`PrivilegesRequired=lowest`) — no UAC prompt required |
-| **Startup entry** | Optional; presented as a checked-by-default task during setup; written to `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` |
+| **Startup entry** | Optional; presented as checked on first install (`checkedonce` flag); written to `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` |
 | **Desktop icon** | Optional; presented as an unchecked task during setup |
 | **WebView2 Runtime** | Automatically installed silently from the bundled bootstrapper if not already present on the machine |
 | **Uninstall** | Removes all files from the install directory and deletes `%APPDATA%\BetterWinTab` (user settings and state) |
@@ -145,7 +145,13 @@ git push origin v1.2.0
     `MicrosoftEdgeWebview2Setup.exe` is downloaded from the official Microsoft URL and placed at `redist/MicrosoftEdgeWebview2Setup.exe`.
   </Step>
 
-  <Step title="Restore and publish x64">
+  <Step title="Restore dependencies">
+    ```powershell
+    dotnet restore BetterWinTab.csproj
+    ```
+  </Step>
+
+  <Step title="Publish x64 build">
     ```powershell
     dotnet publish BetterWinTab.csproj `
       -c Release `
@@ -169,7 +175,7 @@ git push origin v1.2.0
     The publish output folder is compressed using `Compress-Archive`:
 
     ```powershell
-    Compress-Archive -Path "bin/Release/.../win-x64/publish/*" `
+    Compress-Archive -Path "bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/*" `
                      -DestinationPath "installer-output/BetterWinTab-1.2.0-win-x64-portable.zip"
     ```
   </Step>

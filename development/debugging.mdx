@@ -1,5 +1,5 @@
 ---
-title: "Debug BetterWinTab with VS Code"
+title: "Debug BetterWinTab Using VS Code Tasks and Coreclr Debugger"
 sidebarTitle: "Debugging"
 description: "Run BetterWinTab in debug mode using VS Code tasks, the .NET CLI, or the coreclr launch configuration with full breakpoint support."
 ---
@@ -102,7 +102,7 @@ The repository includes two configurations in `.vscode/launch.json`:
 |---|---|---|
 | `type` | `coreclr` | Uses the .NET coreclr debugger provided by the C# extension |
 | `preLaunchTask` | `build-x64` | Automatically kills and rebuilds before each debug session |
-| `program` | `.../win-x64/BetterWinTab.exe` | Points to the x64 debug output |
+| `program` | `bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/BetterWinTab.exe` | Points to the x64 debug output |
 | `console` | `internalConsole` | Routes `Debug.WriteLine` output to the VS Code Debug Console |
 | `stopAtEntry` | `false` | The process runs normally; debugger attaches after startup |
 

@@ -31,10 +31,10 @@ Each captured text entry is stored as a `ClipboardItem`:
 | `IsImage` | `bool` | `true` for image clipboard events |
 | `ImageSource` | `BitmapImage?` | Asynchronously loaded bitmap preview (image entries only) |
 | `CapturedAt` | `DateTime` | Timestamp of when the entry was captured |
-| `Preview` | `string` | Truncated to 120 chars; falls back to `"[Image]"` for images |
-| `SingleLinePreview` | `string` | Newlines replaced with spaces, truncated to 80 chars |
+| `Preview` | `string` | Truncated to 120 chars with `...` suffix; falls back to `"[Image]"` for images |
+| `SingleLinePreview` | `string` | `\r\n`, `\n`, and `\r` replaced with spaces, truncated to 80 chars |
 | `TimeAgo` | `string` | Human-readable age: `"just now"`, `"5m ago"`, `"2h ago"`, or a date string |
-| `SizeInfo` | `string` | Character count for text; `"Image"` for image entries |
+| `SizeInfo` | `string` | Character count for text (e.g. `"42 chars"`); `"Image"` for image entries |
 | `IsPinned` | `bool` | Whether the item is pinned to survive app restarts |
 
 **Deduplication:** if you copy the same text twice, BetterWinTab moves the existing entry to the top of the list rather than adding a duplicate. This keeps the history clean during repetitive copy-paste workflows.
@@ -69,15 +69,17 @@ AddClipboardFormatListener(hwnd);
 
 When a `WM_CLIPBOARDUPDATE` message arrives:
 
-1. `ClipboardService.ProcessMessage(msg)` checks the message code and calls `CaptureClipboard()`.
-2. `CaptureClipboard()` opens the clipboard with `OpenClipboard`, reads the data for `CF_UNICODETEXT` (Unicode text) or detects `CF_BITMAP`/`CF_DIB` (image), then closes the clipboard.
+1. `ClipboardService.ProcessMessage(msg)` checks the message code and, if `_selfCopying` is not set, calls `CaptureClipboard()`.
+2. `CaptureClipboard()` first calls `IsClipboardFormatAvailable` to determine the content type:
+   - **Text (`CF_UNICODETEXT`):** opens the clipboard with `OpenClipboard(IntPtr.Zero)`, reads the Unicode text via `GetClipboardData`, then closes the clipboard.
+   - **Image (`CF_BITMAP` or `CF_DIB`):** does not open the clipboard directly — instead creates a placeholder `ClipboardItem` with `IsImage = true` immediately, then enqueues an async task to load the actual bitmap via the WinRT `Clipboard.GetContent()` API on the UI thread.
 3. For text: a new `ClipboardItem` is created and inserted at index 0 of the `History` observable collection, or the existing duplicate entry is moved to the top.
-4. For images: a placeholder `ClipboardItem` with `IsImage = true` is inserted, and the actual `BitmapImage` preview is loaded asynchronously on the UI thread via the WinRT `Clipboard.GetContent()` API.
+4. For images: a placeholder `ClipboardItem` with `IsImage = true` is inserted at index 0, and `BitmapImage` preview loading is dispatched to the UI thread.
 5. `TrimHistory()` removes the oldest items if the count exceeds `ClipboardHistoryMaxItems`.
 
 ### Self-Copy Prevention
 
-When you select a history entry and press `Enter`, BetterWinTab calls `ClipboardService.CopyToClipboard(item)`, which writes the text back to the clipboard via Win32. To prevent this programmatic write from creating a duplicate history entry, the service sets an internal `_selfCopying` flag before calling `OpenClipboard`. Any `WM_CLIPBOARDUPDATE` message received while `_selfCopying` is `true` is silently ignored.
+When you select a history entry and press `Enter`, BetterWinTab calls `ClipboardService.CopyToClipboard(item)`, which writes the text back to the clipboard via Win32. To prevent this programmatic write from creating a duplicate history entry, the service sets an internal `_selfCopying` flag before calling `OpenClipboard`. Any `WM_CLIPBOARDUPDATE` message received while `_selfCopying` is `true` is silently ignored. The flag is reset asynchronously via the `DispatcherQueue` after the clipboard write completes, ensuring that any `WM_CLIPBOARDUPDATE` message already queued by the message pump is also suppressed.
 
 ### Image Debouncing
 

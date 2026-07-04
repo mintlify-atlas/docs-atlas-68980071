@@ -36,11 +36,11 @@ BetterWinTab doubles as an application launcher without any extra configuration.
 
 `LaunchService` enumerates `.lnk` shortcut files from both the per-user and all-users Start Menu Programs folders:
 
-```csharp
-// Per-user
+```powershell
+# Per-user
 %APPDATA%\Microsoft\Windows\Start Menu\Programs
 
-// All-users
+# All-users
 %ProgramData%\Microsoft\Windows\Start Menu\Programs
 ```
 
@@ -48,7 +48,7 @@ Both roots are scanned recursively (`SearchOption.AllDirectories`), so apps inst
 
 After scanning, the list is:
 
-1. **De-duplicated by name** — the per-user shortcut wins when both locations contain a shortcut with the same name.
+1. **De-duplicated by name** — the per-user shortcut wins when both locations contain a shortcut with the same name (the per-user root is listed first).
 2. **Sorted alphabetically** — results are stored alphabetically so prefix matches are consistent.
 3. **Filtered for noise** — shortcuts containing common noise keywords (`uninstall`, `readme`, `release notes`, `changelog`, `help`, `documentation`, `license`) are silently excluded to keep results clean.
 

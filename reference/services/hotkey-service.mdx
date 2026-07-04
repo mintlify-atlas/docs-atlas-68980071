@@ -1,7 +1,7 @@
 ---
-title: "HotkeyService API Reference"
+title: "HotkeyService — Global Keyboard Hook API Reference"
 sidebarTitle: "HotkeyService"
-description: "HotkeyService installs a low-level keyboard hook to capture the BetterWinTab activation hotkey globally. Documents Configure, Install, Uninstall, and event members."
+description: "HotkeyService installs a WH_KEYBOARD_LL hook to capture hotkeys globally in BetterWinTab. Documents Configure, Install, Uninstall, and event members."
 ---
 
 `HotkeyService` provides global hotkey detection by installing a **WH_KEYBOARD_LL** low-level keyboard hook via the Win32 `SetWindowsHookEx` API. When the configured key combination is pressed anywhere in the system, the service fires `HotkeyPressed` on the WinUI 3 dispatcher thread. It also monitors for **Alt+Tab** and **Win+Tab** so the overlay can automatically hide when the user switches to the native Windows task switcher.
